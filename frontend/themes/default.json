@@ -1,0 +1,8 @@
+{
+  "brandName": "GOM AI Receptionist",
+  "primaryColor": "#2563EB",
+  "logo": "/logos/default.png",
+  "tagline": "Your intelligent, voice-enabled assistant",
+  "voiceProfile": "default_voice",
+  "apiKey": "env:OPENAI_API_KEY"
+}
