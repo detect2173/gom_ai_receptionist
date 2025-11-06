@@ -1,10 +1,21 @@
-﻿export default function Home() {
-  return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-gray-100 text-gray-800">
-      <h1 className="text-4xl font-bold mb-4">GOM AI Receptionist</h1>
-      <p className="text-lg text-center max-w-xl">
-        The intelligent, voice-enabled assistant for modern businesses.
-      </p>
-    </main>
-  )
+﻿"use client";
+
+import { useEffect, useState } from 'react';
+
+export default function Home() {
+    const [message, setMessage] = useState('Loading...');
+
+    useEffect(() => {
+        fetch('http://127.0.0.1:8000/')
+            .then((res) => res.json())
+            .then((data) => setMessage(data.message))
+            .catch(() => setMessage('Error connecting to backend'));
+    }, []);
+
+    return (
+        <main style={{ fontFamily: 'sans-serif', padding: '2rem' }}>
+            <h1>🤖 GOM AI Receptionist</h1>
+            <p>Backend says: {message}</p>
+        </main>
+    );
 }
