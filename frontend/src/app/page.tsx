@@ -1,21 +1,24 @@
-﻿"use client";
+﻿'use client';
 
-import { useEffect, useState } from 'react';
+import ChatBox from './components/ChatBox';
 
-export default function Home() {
-    const [message, setMessage] = useState('Loading...');
-
-    useEffect(() => {
-        fetch('http://127.0.0.1:8000/')
-            .then((res) => res.json())
-            .then((data) => setMessage(data.message))
-            .catch(() => setMessage('Error connecting to backend'));
-    }, []);
-
+export default function HomePage() {
     return (
-        <main style={{ fontFamily: 'sans-serif', padding: '2rem' }}>
-            <h1>🤖 GOM AI Receptionist</h1>
-            <p>Backend says: {message}</p>
+        <main
+            style={{
+                minHeight: '100vh',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: '#f7f7f7',
+                fontFamily: 'system-ui, sans-serif',
+            }}
+        >
+            <h1 style={{ fontSize: '2rem', marginBottom: '1rem' }}>
+                🤖 GOM AI Receptionist
+            </h1>
+            <ChatBox />
         </main>
     );
 }
