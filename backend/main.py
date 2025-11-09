@@ -3,7 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from rich.console import Console
 from rich.theme import Theme
-from api.chat import router as chat_router
+from backend.api.chat import router as chat_router
+
+import sys, os
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
 
 
 

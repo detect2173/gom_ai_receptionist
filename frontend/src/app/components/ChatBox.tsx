@@ -14,7 +14,10 @@ export default function ChatBox() {
 
     // Optional: greet on load so the box isn’t empty
     useEffect(() => {
-        setMessages([{ sender: "ai", text: "Hi! I’m your AI Receptionist. How can I help?" }]);
+        setMessages([{
+            sender: "ai",
+            text: "Hi! I’m Samantha, the  AI Receptionist for Great Owl Marketing. How can I help?"
+        }]);
     }, []);
 
     const sendMessage = async () => {
