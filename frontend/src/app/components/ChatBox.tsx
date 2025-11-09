@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import MessageBubble from "./MessageBubble";
 
 interface Message {
@@ -12,28 +12,37 @@ export default function ChatBox() {
     const [input, setInput] = useState("");
     const [loading, setLoading] = useState(false);
 
-    const sendMessage = async () => {
-        if (!input.trim()) return;
+    // Optional: greet on load so the box isn’t empty
+    useEffect(() => {
+        setMessages([{ sender: "ai", text: "Hi! I’m your AI Receptionist. How can I help?" }]);
+    }, []);
 
-        const userMessage = { sender: "user" as const, text: input };
+    const sendMessage = async () => {
+        const trimmed = input.trim();
+        if (!trimmed || loading) return;
+
+        const userMessage: Message = { sender: "user", text: trimmed };
         setMessages((prev) => [...prev, userMessage]);
         setInput("");
         setLoading(true);
 
         try {
-            const res = await fetch("http://127.0.0.1:8000/message", {
+            const res = await fetch("http://127.0.0.1:8000/api/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ text: input }),
+                body: JSON.stringify({ message: trimmed }),
             });
 
-            const data = await res.json();
-            const aiMessage = { sender: "ai" as const, text: data.reply };
-            setMessages((prev) => [...prev, aiMessage]);
+            if (!res.ok) {
+                throw new Error(`HTTP ${res.status}`);
+            }
+
+            const data: { reply: string } = await res.json();
+            setMessages((prev) => [...prev, { sender: "ai", text: data.reply }]);
         } catch (err) {
             setMessages((prev) => [
                 ...prev,
-                { sender: "ai", text: "⚠️ Error connecting to backend." },
+                { sender: "ai", text: "⚠️ I couldn’t reach the server. Is the backend running on :8000?" },
             ]);
         } finally {
             setLoading(false);
@@ -45,7 +54,7 @@ export default function ChatBox() {
             style={{
                 display: "flex",
                 flexDirection: "column",
-                width: "500px",
+                width: "560px",
                 margin: "2rem auto",
                 backgroundColor: "#1e1e1e",
                 borderRadius: "12px",
@@ -53,18 +62,9 @@ export default function ChatBox() {
                 color: "#fff",
             }}
         >
-            <h2 style={{ textAlign: "center", marginBottom: "1rem" }}>
-                🤖 GOM AI Receptionist
-            </h2>
+            <h2 style={{ textAlign: "center", marginBottom: "1rem" }}>🤖 GOM AI Receptionist</h2>
 
-            <div
-                style={{
-                    flex: 1,
-                    overflowY: "auto",
-                    maxHeight: "400px",
-                    marginBottom: "1rem",
-                }}
-            >
+            <div style={{ flex: 1, overflowY: "auto", maxHeight: "400px", marginBottom: "1rem" }}>
                 {messages.map((m, i) => (
                     <MessageBubble key={i} sender={m.sender} text={m.text} />
                 ))}

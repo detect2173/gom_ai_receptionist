@@ -3,6 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from rich.console import Console
 from rich.theme import Theme
+from backend.api.chat import router as chat_router
+
+
 
 custom_theme = Theme({
     "info": "cyan",
@@ -14,6 +17,8 @@ console = Console(theme=custom_theme)
 
 
 app = FastAPI()
+app.include_router(chat_router, prefix="/api")
+
 
 # Allow your frontend to connect
 origins = [
