@@ -1,5 +1,5 @@
-export default function MessageBubble({ role, text }: { role: string; text: string }) {
-    const isUser = role === "user";
+export default function MessageBubble({ sender, text }: { sender: string; text: string }) {
+    const isUser = sender === "user";
     return (
         <div
             className={`flex ${isUser ? "justify-end" : "justify-start"} my-2`}
