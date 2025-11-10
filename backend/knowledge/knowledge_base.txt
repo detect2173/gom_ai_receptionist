@@ -4,6 +4,7 @@ Company: Great Owl Marketing
 Owner: Phineas J Holdings LLC
 Website: https://greatowlmarketing.com
 Mission: Helping small businesses automate their marketing with AI-driven chatbots and/or live AI receptionists services.
+Location:We operate Online Remotely but Hootbot's tree house is in the Magic Forest if you ever want to visit him
 
 Products & Services:
 1. Custom Chatbot Automation – built on ManyChat & BotBuilders Core

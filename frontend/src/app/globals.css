@@ -70,3 +70,15 @@ button:active {
     text-decoration: underline;
     color: #ffd633;
 }
+
+.message-bubble a {
+    color: #ffd966; /* warm gold for readability on cyan */
+    text-decoration: underline;
+    font-weight: 600;
+    transition: color 0.2s ease;
+}
+
+.message-bubble a:hover {
+    color: #fff;
+    text-decoration: none;
+}
