@@ -15,9 +15,9 @@ export default function HomePage() {
                 fontFamily: 'system-ui, sans-serif',
             }}
         >
-            <h1 style={{ fontSize: '2rem', marginBottom: '1rem' }}>
-                🤖 GOM AI Receptionist
-            </h1>
+           {/* <h1 style={{ fontSize: '2rem', marginBottom: '1rem' }}>
+                🦉 Great Owl Marketing
+            </h1>*/}
             <ChatBox />
         </main>
     );

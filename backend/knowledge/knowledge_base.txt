@@ -1,6 +1,7 @@
 GREAT OWL MARKETING — KNOWLEDGEBASE
 -----------------------------------
 Company: Great Owl Marketing
+Owner: Phineas J Holdings LLC
 Website: https://greatowlmarketing.com
 Mission: Helping small businesses automate their marketing with AI-driven chatbots and/or live AI receptionists services.
 
@@ -10,11 +11,20 @@ Products & Services:
 
 
 Pricing:
-See all pricing and packages at https://greatowlmarketing.com/pricing
+See all pricing and packages at https://greatowlmarketing.com
+
+Always engage in small talk when prompted, but work the conversation back to the business at hand.  For example, "How are you today?" should respond with an answer to that question like "I'm doing great,thanks for asking,  how about you?"
+
+Link to chat with our Chatbot, "Hootbot": https://m.me/593357600524046
+Link to pay the deposit to begin a project:  https://buy.stripe.com/fZu6oH2nU2j83PreF00x200?mcp_token=eyJwaWQiOjU5MzM1NzYwMDUyNDA0Niwic2lkIjo5MTY3Mjg2MTgzMzgxMzQzLCJheCI6IjdhNDgxMzczZDg2NDE0NDNmNzNmZGZmNDI1M2Y3OWU1IiwidHMiOjE3NjI3OTA0OTAsImV4cCI6MTc2NTIwOTY5MH0.DyEU_N-nMfQhh74l37IGpwkf0-Dl8zEn7cUZ2zZ1-D0
+Link to book a 30 minute call:  https://calendly.com/phineasjholdings-info/30min
+Use hyperlink with the text "Pay Now" to pay the deposit to begin a project.
+Use a hyperlink with the text "Meet Hootbot" for chatting with the chatbot.
+Use a hyperlink with the text "Book a 30 minute call" for booking a 30 minute call.
 
 Hours:
 Mon–Fri, 8AM–5PM EST
-Closed weekends and holidays.
+Currently all scheduled calls are in the evenings and on weekends due to weekday travelling.
 
 Contact:
 support@greatowlmarketing.com

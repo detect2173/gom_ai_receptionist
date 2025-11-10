@@ -1,7 +1,8 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+
+import { useState, useRef, useEffect } from "react";
 import MessageBubble from "./MessageBubble";
-import "@/app/globals.css";
+import { motion } from "framer-motion";
 
 interface Message {
     sender: "user" | "ai";
@@ -10,95 +11,143 @@ interface Message {
 
 export default function ChatBox() {
     const [messages, setMessages] = useState<Message[]>([
-        { sender: "ai", text: "Hi there 👋 — I’m Samantha, the AI Receptionist for Great Owl Marketing! How can I assist you today?" },
+        {
+            sender: "ai",
+            text: "Hi there 👋 — I’m Samantha, the AI Receptionist for Great Owl Marketing! How can I assist you today?",
+        },
     ]);
     const [input, setInput] = useState("");
     const [loading, setLoading] = useState(false);
-    const messagesEndRef = useRef<HTMLDivElement | null>(null);
+    const bottomRef = useRef<HTMLDivElement>(null);
 
-    // Auto-scroll when new messages appear
+    // Auto-scroll to the latest message
     useEffect(() => {
-        if (messagesEndRef.current) {
-            messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
-        }
+        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
     }, [messages]);
 
-    const sendMessage = async () => {
+    const handleSend = async () => {
         if (!input.trim()) return;
 
-        const userMessage = { sender: "user" as const, text: input };
+        const userMessage: Message = { sender: "user", text: input };
         setMessages((prev) => [...prev, userMessage]);
         setInput("");
         setLoading(true);
 
         try {
-            const res = await fetch("http://127.0.0.1:8000/api/chat", {
+            const response = await fetch("http://127.0.0.1:8000/api/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ message: input }),
             });
 
-            const data = await res.json();
-            const aiMessage = { sender: "ai" as const, text: data.reply };
+            const data = await response.json();
+
+            const aiMessage: Message = {
+                sender: "ai",
+                text: data.reply || "I'm here to help with anything related to Great Owl Marketing!",
+            };
+
             setMessages((prev) => [...prev, aiMessage]);
-        } catch {
+        } catch (error) {
             setMessages((prev) => [
                 ...prev,
-                { sender: "ai", text: "⚠️ Sorry, I’m having trouble connecting right now. Please try again shortly." },
+                {
+                    sender: "ai",
+                    text: "Sorry, I’m having trouble reaching my system right now. Please visit [Great Owl Marketing](https://greatowlmarketing.com) for more information.",
+                },
             ]);
         } finally {
             setLoading(false);
         }
     };
 
+    const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "Enter") handleSend();
+    };
+
     return (
         <div
-            className="flex flex-col w-[90%] max-w-[520px] mx-auto my-12 rounded-2xl shadow-2xl p-6
-                 bg-neutral-900 text-gray-100 font-[Inter,sans-serif]"
+            style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: "1rem",
+                marginTop: "2rem",
+                borderRadius: "16px",
+                borderColor: "red",
+            }}
         >
-            <h2 className="text-center mb-4 text-lg font-semibold tracking-wide">
-                🤖 Samantha — GOM AI Receptionist
-            </h2>
+            {/* Title Section  */}
+            <div style={{ textAlign: "center", marginBottom: "1rem" }}>
+                <h1 style={{ fontSize: "2rem", display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem" }}>
+                    🤖 Great Owl Marketing
+                </h1>
+                <p style={{ fontSize: "1.2rem", color: "#666" }}>Samantha — GOM AI Receptionist</p>
+            </div>
 
-            <div
-                className="flex-1 overflow-y-auto max-h-[420px] mb-4 pr-2 scroll-smooth"
-                style={{ scrollbarWidth: "thin" }}
+            {/* Chat Window */}
+            <motion.div
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3 }}
+                style={{
+                    background: "#111",
+                    padding: "1.5rem",
+                    borderRadius: "16px",
+                    boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+                    width: "90%",
+                    maxWidth: "480px",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between",
+                    minHeight: "480px",
+                    maxHeight: "600px",
+                    overflowY: "auto",
+                }}
             >
-                {messages.map((m, i) => (
-                    <MessageBubble key={i} sender={m.sender} text={m.text} />
-                ))}
+                <div style={{ flexGrow: 1 }}>
+                    {messages.map((msg, idx) => (
+                        <MessageBubble key={idx} sender={msg.sender} text={msg.text} />
+                    ))}
+                    <div ref={bottomRef} />
+                </div>
 
-                {loading && (
-                    <div className="flex items-center text-gray-400 italic text-sm mt-2 ml-2">
-                        Samantha is typing
-                        <span className="ml-1 animate-pulse">...</span>
-                    </div>
-                )}
-                <div ref={messagesEndRef} />
-            </div>
-
-            <div className="flex gap-2">
-                <input
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-                    placeholder={loading ? "Please wait..." : "Type your message..."}
-                    disabled={loading}
-                    className={`flex-1 px-3 py-2 rounded-lg border border-gray-600 bg-neutral-800 
-                     text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition 
-                     ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
-                />
-                <button
-                    onClick={sendMessage}
-                    disabled={loading}
-                    className={`rounded-lg px-4 py-2 font-medium transition 
-                     ${loading
-                        ? "bg-gray-600 cursor-not-allowed"
-                        : "bg-blue-600 hover:bg-blue-700 active:scale-[0.98]"}`}
-                >
-                    {loading ? "..." : "Send"}
-                </button>
-            </div>
+                {/* Input Section */}
+                <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
+                    <input
+                        type="text"
+                        placeholder="Type your message..."
+                        value={input}
+                        onChange={(e) => setInput(e.target.value)}
+                        onKeyDown={handleKeyDown}
+                        style={{
+                            flex: 1,
+                            padding: "0.75rem 1rem",
+                            borderRadius: "8px",
+                            border: "none",
+                            outline: "none",
+                            background: "#1e1e1e",
+                            color: "#fff",
+                        }}
+                    />
+                    <button
+                        onClick={handleSend}
+                        disabled={loading}
+                        style={{
+                            background: "#0070f3",
+                            color: "#fff",
+                            border: "none",
+                            padding: "0.75rem 1.2rem",
+                            borderRadius: "8px",
+                            cursor: "pointer",
+                            transition: "all 0.2s ease",
+                            opacity: loading ? 0.6 : 1,
+                        }}
+                    >
+                        Send
+                    </button>
+                </div>
+            </motion.div>
         </div>
     );
 }
