@@ -1,6 +1,7 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import MessageBubble from "./MessageBubble";
+import "@/app/globals.css";
 
 interface Message {
     sender: "user" | "ai";
@@ -8,23 +9,24 @@ interface Message {
 }
 
 export default function ChatBox() {
-    const [messages, setMessages] = useState<Message[]>([]);
+    const [messages, setMessages] = useState<Message[]>([
+        { sender: "ai", text: "Hi there 👋 — I’m Samantha, the AI Receptionist for Great Owl Marketing! How can I assist you today?" },
+    ]);
     const [input, setInput] = useState("");
     const [loading, setLoading] = useState(false);
+    const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
-    // Optional: greet on load so the box isn’t empty
+    // Auto-scroll when new messages appear
     useEffect(() => {
-        setMessages([{
-            sender: "ai",
-            text: "Hi! I’m Samantha, the  AI Receptionist for Great Owl Marketing. How can I help?"
-        }]);
-    }, []);
+        if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+        }
+    }, [messages]);
 
     const sendMessage = async () => {
-        const trimmed = input.trim();
-        if (!trimmed || loading) return;
+        if (!input.trim()) return;
 
-        const userMessage: Message = { sender: "user", text: trimmed };
+        const userMessage = { sender: "user" as const, text: input };
         setMessages((prev) => [...prev, userMessage]);
         setInput("");
         setLoading(true);
@@ -33,19 +35,16 @@ export default function ChatBox() {
             const res = await fetch("http://127.0.0.1:8000/api/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message: trimmed }),
+                body: JSON.stringify({ message: input }),
             });
 
-            if (!res.ok) {
-                throw new Error(`HTTP ${res.status}`);
-            }
-
-            const data: { reply: string } = await res.json();
-            setMessages((prev) => [...prev, { sender: "ai", text: data.reply }]);
-        } catch (err) {
+            const data = await res.json();
+            const aiMessage = { sender: "ai" as const, text: data.reply };
+            setMessages((prev) => [...prev, aiMessage]);
+        } catch {
             setMessages((prev) => [
                 ...prev,
-                { sender: "ai", text: "⚠️ I couldn’t reach the server. Is the backend running on :8000?" },
+                { sender: "ai", text: "⚠️ Sorry, I’m having trouble connecting right now. Please try again shortly." },
             ]);
         } finally {
             setLoading(false);
@@ -54,51 +53,48 @@ export default function ChatBox() {
 
     return (
         <div
-            style={{
-                display: "flex",
-                flexDirection: "column",
-                width: "560px",
-                margin: "2rem auto",
-                backgroundColor: "#1e1e1e",
-                borderRadius: "12px",
-                padding: "1rem",
-                color: "#fff",
-            }}
+            className="flex flex-col w-[90%] max-w-[520px] mx-auto my-12 rounded-2xl shadow-2xl p-6
+                 bg-neutral-900 text-gray-100 font-[Inter,sans-serif]"
         >
-            <h2 style={{ textAlign: "center", marginBottom: "1rem" }}>🤖 GOM AI Receptionist</h2>
+            <h2 className="text-center mb-4 text-lg font-semibold tracking-wide">
+                🤖 Samantha — GOM AI Receptionist
+            </h2>
 
-            <div style={{ flex: 1, overflowY: "auto", maxHeight: "400px", marginBottom: "1rem" }}>
+            <div
+                className="flex-1 overflow-y-auto max-h-[420px] mb-4 pr-2 scroll-smooth"
+                style={{ scrollbarWidth: "thin" }}
+            >
                 {messages.map((m, i) => (
                     <MessageBubble key={i} sender={m.sender} text={m.text} />
                 ))}
+
+                {loading && (
+                    <div className="flex items-center text-gray-400 italic text-sm mt-2 ml-2">
+                        Samantha is typing
+                        <span className="ml-1 animate-pulse">...</span>
+                    </div>
+                )}
+                <div ref={messagesEndRef} />
             </div>
 
-            <div style={{ display: "flex", gap: "0.5rem" }}>
+            <div className="flex gap-2">
                 <input
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    placeholder="Type your message..."
-                    style={{
-                        flex: 1,
-                        padding: "0.5rem",
-                        borderRadius: "8px",
-                        border: "1px solid #444",
-                        backgroundColor: "#2b2b2b",
-                        color: "#fff",
-                    }}
                     onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+                    placeholder={loading ? "Please wait..." : "Type your message..."}
+                    disabled={loading}
+                    className={`flex-1 px-3 py-2 rounded-lg border border-gray-600 bg-neutral-800 
+                     text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 transition 
+                     ${loading ? "opacity-50 cursor-not-allowed" : ""}`}
                 />
                 <button
                     onClick={sendMessage}
                     disabled={loading}
-                    style={{
-                        backgroundColor: loading ? "#555" : "#0070f3",
-                        color: "#fff",
-                        border: "none",
-                        borderRadius: "8px",
-                        padding: "0.5rem 1rem",
-                        cursor: loading ? "not-allowed" : "pointer",
-                    }}
+                    className={`rounded-lg px-4 py-2 font-medium transition 
+                     ${loading
+                        ? "bg-gray-600 cursor-not-allowed"
+                        : "bg-blue-600 hover:bg-blue-700 active:scale-[0.98]"}`}
                 >
                     {loading ? "..." : "Send"}
                 </button>
