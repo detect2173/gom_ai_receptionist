@@ -1,73 +1,54 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from rich.console import Console
-from rich.theme import Theme
-from backend.api.chat import router as chat_router
+from pydantic import BaseModel, Field
+import logging
+import os
 
-import sys, os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# ----- Logging -----
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+)
+logger = logging.getLogger("gom.ai_receptionist")
 
+# ----- App -----
+app = FastAPI(title="GOM AI Receptionist API", version="0.1.0")
 
-
-
-
-
-
-
-
-
-custom_theme = Theme({
-    "info": "cyan",
-    "warning": "yellow",
-    "error": "bold red",
-    "debug": "dim blue",
-})
-console = Console(theme=custom_theme)
-
-
-app = FastAPI()
-app.include_router(chat_router, prefix="/api")
-
-
-# Allow your frontend to connect
-origins = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000"
-]
-
+# CORS (adjust origins for prod)
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Data models for chat messages
-class MessageIn(BaseModel):
-    text: str
+# ----- Models -----
+class ChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, description="User message")
 
-class MessageOut(BaseModel):
+class ChatResponse(BaseModel):
     reply: str
 
-@app.get("/")
-def root():
-    return {"message": "GOM AI Receptionist backend is running!"}
+# ----- Routes -----
+@app.get("/healthz")
+def healthz():
+    return {"status": "ok"}
 
-@app.post("/chat", response_model=MessageOut)
-def chat(message: MessageIn):
-    """A simple endpoint for chatbot replies."""
-    user_message = message.text.lower()
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat(req: ChatRequest):
+    msg = req.message.strip()
+    if not msg:
+        raise HTTPException(status_code=400, detail="Message cannot be empty.")
 
-    # Example logic (will later be replaced by AI)
-    if "hello" in user_message:
-        reply = "Hello there! How can I help you today?"
-    elif "hours" in user_message:
-        reply = "We’re open Monday through Friday, 8 AM to 5 PM."
-    elif "contact" in user_message:
-        reply = "You can reach us at support@greatowlmarketing.com."
-    else:
-        reply = "I'm still learning — could you rephrase that?"
+    logger.info("Incoming message: %s", msg)
 
-    return {"reply": reply}
+    # TODO: Replace with your real response generator
+    reply = (
+        "Hello! I'm doing great, thanks for asking. "
+        "How can I assist you today? (Payments: 'Pay Now', Demos: 'Meet Hootbot', Scheduling: 'Book a 30 minute call')"
+    )
+
+    logger.info("Reply: %s", reply)
+    return ChatResponse(reply=reply)
