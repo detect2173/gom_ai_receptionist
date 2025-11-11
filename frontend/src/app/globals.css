@@ -1,84 +1,84 @@
 @import "tailwindcss/preflight";
 @import "tailwindcss/utilities";
 
-
 :root {
-    --background: #ffffff;
-    --foreground: #171717;
-    --accent: #0070f3;
-    --bubble-ai: #1e293b;
-    --bubble-user: #0ea5e9;
-    --font-body: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  --background: #ffffff;
+  --foreground: #171717;
+  --accent: #0070f3;
+  --bubble-ai: #1e293b;
+  --bubble-user: #0ea5e9;
+  --font-body: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", sans-serif;
 }
 
 @media (prefers-color-scheme: dark) {
-    :root {
-        --background: #0a0a0a;
-        --foreground: #ededed;
-        --bubble-ai: #1f2937;
-        --bubble-user: #2563eb;
-    }
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+    --bubble-ai: #1f2937;
+    --bubble-user: #2563eb;
+  }
 }
 
 body {
-    background-color: var(--background);
-    color: var(--foreground);
-    font-family: var(--font-body);
-    line-height: 1.6;
-    margin: 0;
-    padding: 0;
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-body);
+  line-height: 1.6;
+  margin: 0;
+  padding: 0;
 }
 
 /* Scrollbar Styling */
 ::-webkit-scrollbar {
-    width: 8px;
+  width: 8px;
 }
 ::-webkit-scrollbar-thumb {
-    background-color: #444;
-    border-radius: 8px;
+  background-color: #444;
+  border-radius: 8px;
 }
 ::-webkit-scrollbar-thumb:hover {
-    background-color: #666;
+  background-color: #666;
 }
 
 .ai-bubble {
-    background: var(--bubble-ai);
-    color: #fff;
-    align-self: flex-start;
+  background: var(--bubble-ai);
+  color: #fff;
+  align-self: flex-start;
 }
 
 .user-bubble {
-    background: var(--bubble-user);
-    color: #fff;
-    align-self: flex-end;
+  background: var(--bubble-user);
+  color: #fff;
+  align-self: flex-end;
 }
 
 button {
-    transition: background-color 0.2s ease, transform 0.1s ease;
+  transition: background-color 0.2s ease, transform 0.1s ease;
 }
 button:active {
-    transform: scale(0.97);
+  transform: scale(0.97);
 }
 
 .link {
-    color: #ffcc00;
-    text-decoration: none;
-    font-weight: 600;
+  color: #ffcc00;
+  text-decoration: none;
+  font-weight: 600;
 }
 
 .link:hover {
-    text-decoration: underline;
-    color: #ffd633;
+  text-decoration: underline;
+  color: #ffd633;
 }
 
 .message-bubble a {
-    color: #ffd966; /* warm gold for readability on cyan */
-    text-decoration: underline;
-    font-weight: 600;
-    transition: color 0.2s ease;
+  color: #ffd966; /* warm gold for readability on cyan */
+  text-decoration: underline;
+  font-weight: 600;
+  transition: color 0.2s ease;
 }
 
 .message-bubble a:hover {
-    color: #fff;
-    text-decoration: none;
+  color: #fff;
+  text-decoration: none;
 }

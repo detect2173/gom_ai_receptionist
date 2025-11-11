@@ -1,0 +1,28 @@
+# Ignore build artifacts and dependencies
+node_modules
+.next
+dist
+build
+coverage
+out
+.cache
+public
+
+# Ignore Python virtual environments
+venv
+__pycache__
+
+# Ignore logs and manifests
+*.log
+*.json
+*.md
+*.lock
+
+# Ignore backend compiled stuff
+backend/**/*.pyc
+backend/__pycache__/
+backend/venv/
+
+# Ignore IDE files
+.idea
+.vscode
