@@ -14,24 +14,27 @@ interface MessageBubbleProps {
 async function formatMessage(raw: string): Promise<string> {
   let s = raw;
 
+  // Link style for branded hyperlinks
   const linkStyle = 'style="color:#38BDF8;text-decoration:underline;font-weight:600"';
 
-  // Friendly aliases for key links
-  s = s.replace(
-    /\bGreat Owl Marketing\b/gi,
-    `<a href="https://greatowlmarketing.com" target="_blank" rel="noopener noreferrer" ${linkStyle}>Great Owl Marketing</a>`
-  );
+  // Map of branded link aliases → destination URLs
+  const links: Record<string, string> = {
+    "Great Owl Marketing": "https://greatowlmarketing.com",
+    "Meet Hootbot": "https://m.me/593357600524046",
+    "Pay Now": "https://buy.stripe.com/fZu6oH2nU2j83PreF00x200",
+    "Book a 30 minute call": "https://calendly.com/phineasjholdings-info/30min",
+  };
 
-  s = s.replace(
-    /\bMeet Hootbot\b/gi,
-    `<a href="https://m.me/593357600524046" target="_blank" rel="noopener noreferrer" ${linkStyle}>Meet Hootbot</a>`
-  );
+  // Replace occurrences of each alias with its hyperlink
+  for (const [text, url] of Object.entries(links)) {
+    const pattern = new RegExp(`\\b${text}\\b`, "gi");
+    s = s.replace(
+      pattern,
+      `<a href="${url}" target="_blank" rel="noopener noreferrer" ${linkStyle}>${text}</a>`
+    );
+  }
 
-  s = s.replace(
-    /\bPay Now\b/gi,
-    `<a href="https://buy.stripe.com/fZ6oH2nU2j83PreF00x200" target="_blank" rel="noopener noreferrer" ${linkStyle}>Pay Now</a>`
-  );
-
+  // Parse markdown to HTML and sanitize
   const html = await marked.parse(s);
   return DOMPurify.sanitize(html);
 }
@@ -93,7 +96,10 @@ export default function MessageBubble({ text, isAI = false }: MessageBubbleProps
       transition={{ duration: 0.25 }}
       className={`my-2 flex ${isAI ? "justify-start" : "justify-end"}`}
     >
-      <div className="max-w-[80%] text-sm leading-relaxed rounded-2xl" style={bubbleStyle}>
+      <div
+        className="max-w-[80%] text-sm leading-relaxed rounded-2xl prose prose-invert"
+        style={bubbleStyle}
+      >
         {isAI ? (
           <TypeAnimation text={displayHTML} />
         ) : (
