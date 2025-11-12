@@ -1,5 +1,6 @@
 "use client";
-import React, { useState, useEffect, useRef } from "react";
+
+import React, { useState, useEffect, useRef, ChangeEvent, KeyboardEvent } from "react";
 import MessageBubble from "./MessageBubble";
 
 interface Message {
@@ -11,7 +12,7 @@ export default function ChatBox() {
   const [messages, setMessages] = useState<Message[]>([
     {
       sender: "ai",
-      text: `Hi there 👋 — I’m Samantha, the AI Receptionist for <a href="https://greatowlmarketing.com" target="_blank" rel="noopener noreferrer" class="link">Great Owl Marketing!</a> How can I assist you today?`,
+      text: "Hi there 👋 — I’m Samantha, the AI Receptionist for Great Owl Marketing! How can I assist you today?",
     },
   ]);
   const [input, setInput] = useState("");
@@ -21,69 +22,71 @@ export default function ChatBox() {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const sendMessage = async () => {
-    if (!input.trim()) return;
+  async function sendMessage() {
+    const userMessage = input.trim();
+    if (!userMessage) return;
 
-    const newUserMessage: Message = { sender: "user", text: input };
-    setMessages((prev) => [...prev, newUserMessage]);
+    setMessages((prev) => [...prev, { sender: "user", text: userMessage }]);
     setInput("");
 
     try {
-      const response = await fetch("http://127.0.0.1:8000/api/chat", {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+
+      const response = await fetch(`${API_URL}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: input }),
+        body: JSON.stringify({ message: userMessage }),
       });
 
+      if (!response.ok) throw new Error(`HTTP error! ${response.status}`);
       const data = await response.json();
-      const aiMessage: Message = {
-        sender: "ai",
-        text: data.reply || "Sorry, I did not understand that.",
-      };
-      setMessages((prev) => [...prev, aiMessage]);
-    } catch (error) {
-      console.error("Error communicating with backend:", error);
-      const fallback: Message = {
-        sender: "ai",
-        text: "⚠️ Sorry, there was a connection issue. Please try again shortly.",
-      };
-      setMessages((prev) => [...prev, fallback]);
-    }
-  };
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+      setMessages((prev) => [...prev, { sender: "ai", text: data.reply }]);
+    } catch (err) {
+      console.error("Error:", err);
+      setMessages((prev) => [
+        ...prev,
+        { sender: "ai", text: "Sorry, I encountered a small hiccup. Could you try again?" },
+      ]);
+    }
+  }
+
+  const handleKeyPress = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") sendMessage();
   };
 
   return (
-    <div className="flex flex-col items-center p-4">
-      <div className="bg-white dark:bg-neutral-900 p-6 rounded-3xl shadow-xl w-full max-w-md">
-        <div className="text-center mb-3">
-          <h1 className="text-2xl font-semibold flex items-center justify-center gap-2">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
+      <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl border border-gray-200 flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="text-center py-3 border-b border-gray-200">
+          <h1 className="text-lg font-semibold flex justify-center items-center gap-2">
             🤖 Great Owl Marketing
           </h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Samantha — GOM AI Receptionist</p>
+          <p className="text-gray-600 text-sm">Samantha — GOM AI Receptionist</p>
         </div>
 
-        <div className="bg-black text-white p-4 rounded-2xl h-96 overflow-y-auto flex flex-col space-y-3 shadow-inner">
+        {/* Chat window */}
+        <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-black">
           {messages.map((msg, index) => (
-            <MessageBubble key={index} sender={msg.sender} text={msg.text} />
+            <MessageBubble key={index} text={msg.text} isAI={msg.sender === "ai"} />
           ))}
           <div ref={chatEndRef} />
         </div>
 
-        <div className="mt-4 flex gap-2">
+        {/* Input area */}
+        <div className="flex items-center border-t border-gray-200 p-3 bg-black">
           <input
             type="text"
             placeholder="Type your message..."
             className="flex-1 p-2 rounded-lg bg-neutral-900 text-white border border-neutral-700 focus:outline-none focus:ring-2 focus:ring-sky-500"
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
             onKeyDown={handleKeyPress}
           />
           <button
             onClick={sendMessage}
-            className="bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-lg shadow-md active:scale-95"
+            className="ml-2 px-4 py-2 bg-sky-600 hover:bg-sky-700 rounded-lg text-white font-medium"
           >
             Send
           </button>

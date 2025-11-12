@@ -1,5 +1,5 @@
-@import "tailwindcss/preflight";
-@import "tailwindcss/utilities";
+/* Tailwind v4 */
+@import "tailwindcss";
 
 /* ====== ROOT THEME ====== */
 :root {
@@ -121,4 +121,5 @@ a:hover,
     input[type="text"] {
         font-size: 0.95rem;
     }
+
 }
