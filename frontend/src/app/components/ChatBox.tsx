@@ -16,11 +16,10 @@ interface Message {
     text: string;
 }
 
-// Toggle this to true when you want backend prompt logging in the console
-const DEBUG = false;
-
 const INITIAL_GREETING =
     "Hi there 👋 — I’m Samantha, the AI Receptionist for Great Owl Marketing! How can I assist you today?";
+
+const DEBUG = false;
 
 export default function ChatBox() {
     const [messages, setMessages] = useState<Message[]>([
@@ -31,27 +30,27 @@ export default function ChatBox() {
     const chatEndRef = useRef<HTMLDivElement | null>(null);
     const [sessionId] = useState(() => uuidv4());
 
-    // Smooth scroll when messages change or while streaming
+    // Smooth autoscroll
     useEffect(() => {
-        const id = window.setTimeout(() => {
+        const t = setTimeout(() => {
             chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-        }, 30);
-        return () => window.clearTimeout(id);
+        }, 40);
+        return () => clearTimeout(t);
     }, [messages.length, loading]);
 
-    // Rough tone detector (for typing speed)
+    /** Detect rough tone to adjust typing simulation speed */
     const detectTone = (
         text: string
     ): "casual" | "formal" | "stressed" | "excited" | "neutral" => {
         const t = text.toLowerCase();
         if (/(yo|hey|sup|lol|haha)/.test(t)) return "casual";
         if (/(good morning|dear|regards|sincerely)/.test(t)) return "formal";
-        if (/(frustrated|angry|mad|upset|behind|late)/.test(t)) return "stressed";
+        if (/(frustrated|angry|upset|behind)/.test(t)) return "stressed";
         if (/(awesome|great|amazing|excited|love|wow)/.test(t)) return "excited";
         return "neutral";
     };
 
-    // Streaming from backend → progressively update last AI message
+    /** Streaming AI response */
     const streamAIResponse = async (
         reader: ReadableStreamDefaultReader,
         tone: string
@@ -79,7 +78,7 @@ export default function ChatBox() {
             setMessages((prev) => {
                 const copy = [...prev];
                 const last = copy[copy.length - 1];
-                if (last && last.sender === "ai") {
+                if (last?.sender === "ai") {
                     last.text = partial;
                 } else {
                     copy.push({ sender: "ai", text: partial });
@@ -87,13 +86,13 @@ export default function ChatBox() {
                 return copy;
             });
 
-            chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+            chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
             await new Promise((r) => setTimeout(r, delay));
         }
-
         setLoading(false);
     };
 
+    /** Send user message */
     const sendMessage = async () => {
         const text = input.trim();
         if (!text || loading) return;
@@ -120,13 +119,11 @@ export default function ChatBox() {
 
             const contentType = res.headers.get("content-type") || "";
             if (contentType.includes("application/json")) {
-                // Fallback if backend ever returns JSON instead of streaming text
                 const data = await res.json();
-                const reply =
-                    typeof data.reply === "string"
-                        ? data.reply
-                        : JSON.stringify(data, null, 2);
-                setMessages((prev) => [...prev, { sender: "ai", text: reply }]);
+                setMessages((prev) => [
+                    ...prev,
+                    { sender: "ai", text: data.reply || "I’m here to help!" },
+                ]);
                 setLoading(false);
                 return;
             }
@@ -137,11 +134,7 @@ export default function ChatBox() {
             } else {
                 setMessages((prev) => [
                     ...prev,
-                    {
-                        sender: "ai",
-                        text:
-                            "I’m here and ready to help! What would you like to do next?",
-                    },
+                    { sender: "ai", text: "I’m here and ready to help!" },
                 ]);
                 setLoading(false);
             }
@@ -152,97 +145,83 @@ export default function ChatBox() {
                 {
                     sender: "ai",
                     text:
-                        "⚠️ I’m having trouble reaching my system right now. Please try again shortly or book a quick call: Book a 30-Minute Call.",
+                        "⚠️ I’m having trouble reaching my system right now. Please try again shortly!",
                 },
             ]);
             setLoading(false);
         }
     };
 
+    /** Reset chat & backend memory */
     const resetChat = async () => {
         try {
             const API_URL =
                 process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-            const headers: HeadersInit = {
-                "Content-Type": "application/json",
-            };
-            if (DEBUG) headers["X-Debug"] = "true";
-
             await fetch(`${API_URL}/api/reset`, {
                 method: "POST",
-                headers,
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ session_id: sessionId }),
             });
-        } catch (e) {
-            console.error("Reset error:", e);
-        }
+        } catch {}
 
-        // Reset local UI regardless of backend result
         setMessages([{ sender: "ai", text: INITIAL_GREETING }]);
         setInput("");
         setLoading(false);
     };
 
-    const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === "Enter") sendMessage();
-    };
-
     return (
-        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
-            <motion.div
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3 }}
-                className="w-full max-w-md bg-gray-900 text-white rounded-3xl shadow-lg overflow-hidden"
-            >
-                {/* Header */}
-                <div className="bg-gradient-to-r from-blue-600 to-sky-500 p-4 flex items-center justify-between">
+        <div className="flex flex-col items-center min-h-screen bg-gray-50 p-4">
+            <div className="w-full max-w-md rounded-3xl bg-gray-900 text-white shadow-xl overflow-hidden">
+                {/* HEADER */}
+                <div className="flex justify-between items-center bg-gradient-to-r from-blue-600 to-sky-500 px-4 py-3">
                     <div className="text-center flex-1">
-                        <h1 className="text-lg font-semibold flex justify-center items-center gap-2">
-                            🤖 Great Owl Marketing
-                        </h1>
-                        <p className="text-sm opacity-90">
-                            Samantha — GOM AI Receptionist
-                        </p>
+                        <h1 className="text-lg font-semibold">🤖 Great Owl Marketing</h1>
+                        <p className="text-sm opacity-90">Samantha — AI Receptionist</p>
                     </div>
+
                     <button
                         onClick={resetChat}
-                        className="ml-2 text-xs bg-gray-900/40 hover:bg-gray-900/70 px-3 py-1 rounded-full border border-white/30"
+                        className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full"
                     >
                         Reset
                     </button>
                 </div>
 
-                {/* Chat */}
-                <div className="flex flex-col space-y-3 p-4 overflow-y-auto max-h-[520px]">
+                {/* CHAT WINDOW */}
+                <div className="p-4 space-y-3 max-h-[520px] overflow-y-auto">
                     {messages.map((m, i) => (
                         <MessageBubble key={i} text={m.text} isAI={m.sender === "ai"} />
                     ))}
+
                     {loading && (
                         <motion.div
-                            animate={{ opacity: [0.5, 1, 0.5] }}
+                            animate={{ opacity: [0.4, 1, 0.4] }}
                             transition={{ duration: 1.2, repeat: Infinity }}
-                            className="text-sky-400 italic text-sm px-2"
+                            className="text-sky-400 italic text-sm"
                         >
                             Samantha is typing…
                         </motion.div>
                     )}
+
                     <div ref={chatEndRef} />
                 </div>
 
-                {/* Input */}
-                <div className="flex items-center p-3 bg-gray-800 border-t border-gray-700">
+                {/* INPUT */}
+                <div className="flex items-center bg-gray-800 p-3 border-t border-gray-700">
                     <input
                         type="text"
-                        placeholder="Type your message..."
-                        className="flex-1 bg-gray-700 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
                         value={input}
                         onChange={(e: ChangeEvent<HTMLInputElement>) =>
                             setInput(e.target.value)
                         }
-                        onKeyDown={onKey}
+                        onKeyDown={(e: KeyboardEvent<HTMLInputElement>) =>
+                            e.key === "Enter" && sendMessage()
+                        }
+                        placeholder="Type your message..."
+                        className="flex-1 bg-gray-700 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
                     />
+
                     <button
                         onClick={sendMessage}
                         disabled={loading}
@@ -251,7 +230,7 @@ export default function ChatBox() {
                         Send
                     </button>
                 </div>
-            </motion.div>
+            </div>
         </div>
     );
 }

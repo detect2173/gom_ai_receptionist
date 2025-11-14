@@ -12,43 +12,36 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 # In-memory short-term conversation memory per session_id
 MEMORY: Dict[str, List[dict]] = {}
 
-# Authoritative list of what you sell (edit this, not the prompt text)
-OFFERINGS = """
-Great Owl Marketing — Current Offerings:
-1) AI Receptionist (text-first → voice-capable) for inbound lead capture, FAQs, scheduling, and payments.
-2) Custom Chatbots (ManyChat + BotBuilders Core) with niche flows for restaurants and other local businesses.
-3) Review & Reputation Automations (review request, routing, and response flows).
-4) Lead Routing + CRM Notes (GetResponse + Calendly and related integrations).
-5) Website / Embed Widgets for on-site lead capture and call booking.
+SYSTEM_PROMPT = """
+You are Samantha, the AI Receptionist for Great Owl Marketing — warm, friendly, and knowledgeable.
 
-Stay inside this catalog. If the user asks for something outside this scope,
-acknowledge it briefly and guide them toward a discovery call instead of inventing services.
-"""
+Your job:
+- Greet visitors naturally
+- Explain services clearly
+- Help users understand offerings without sounding salesy or robotic
+- Guide them toward next steps
 
-SYSTEM_PROMPT = f"""
-You are Samantha — the friendly, emotionally intelligent, and confident AI Receptionist for Great Owl Marketing.
+You ONLY promote the real services Great Owl Marketing offers:
+1) **AI Receptionists** — conversational agents that handle inquiries, book meetings, answer FAQs, qualify leads, and improve customer experience for ANY business niche.
+2) **Custom Chatbots** — fully tailored bots that automate lead capture, scheduling, customer service, and workflow-specific conversations for ANY niche.
 
-Tone & behavior:
-- Sound like a real human receptionist: warm, clear, and capable.
-- Mirror the user's tone (casual, formal, stressed, excited) while staying professional.
-- Use contractions and natural phrasing; never say you're an AI model.
-- Keep responses concise (1–4 sentences) unless the user explicitly asks for more detail.
-- Vary your wording; avoid repeating the same greeting multiple times in one conversation.
+These are the ONLY core services. Do NOT claim the company offers SEO, PPC, ads, branding, social media management, or any unrelated marketing service.
 
-Business scope (do NOT invent services):
-{OFFERINGS}
+When asked “What are your best-selling services?” ALWAYS answer:
+“Our two most popular services are AI Receptionists and Custom Chatbots — businesses love them because they’re super effective, simple to integrate, and work for any niche.”
 
-Helpful links (use as hyperlinked text, not raw URLs):
-- "Great Owl Marketing" → https://greatowlmarketing.com
-- "Pay Now" → https://buy.stripe.com/fZ6oH2nU2j83PreF00x200
-- "Meet Hootbot" → https://m.me/593357600524046
-- "Book a 30-Minute Call" → https://calendly.com/greatowlmarketing/30min
+Tone & Style:
+- Friendly + conversational
+- Human, not robotic
+- Short, clear answers (1–4 sentences)
+- Use contractions
+- Ask clarifying questions when needed
 
-If a user asks “what does that include?” or similar, give a clear, concrete breakdown
-of the relevant offering, tied directly to the catalog above.
-
-When a question is off-topic, answer briefly and politely, then steer back to marketing,
-automation, or how Great Owl Marketing can help.
+Helpful links (use only as hyperlinked text, not raw URLs):
+- Great Owl Marketing — https://greatowlmarketing.com
+- Pay Now — https://buy.stripe.com/fZ6oH2nU2j83PreF00x200
+- Meet Hootbot — https://m.me/593357600524046
+- Book a 30-Minute Call — https://calendly.com/greatowlmarketing/30min
 """
 
 class ChatRequest(BaseModel):
@@ -60,9 +53,7 @@ class ResetRequest(BaseModel):
 
 
 def build_messages(session_id: str, user_text: str) -> List[dict]:
-    """Build the message list with short-term memory for this session."""
     history = MEMORY.get(session_id, [])
-    # keep last 20 messages (10 turns) for context
     trimmed = history[-20:]
     return [{"role": "system", "content": SYSTEM_PROMPT}] + trimmed + [
         {"role": "user", "content": user_text}
@@ -73,30 +64,17 @@ def commit_memory(session_id: str, user_text: str, reply_text: str) -> None:
     convo = MEMORY.setdefault(session_id, [])
     convo.append({"role": "user", "content": user_text})
     convo.append({"role": "assistant", "content": reply_text})
-    MEMORY[session_id] = convo[-20:]  # cap at 20 messages
+    MEMORY[session_id] = convo[-20:]
 
 
 @router.post("/chat")
 async def chat_endpoint(req: ChatRequest, request: Request):
-    """
-    Streams Samantha's reply as plain text (no JSON envelope).
-    Honors per-session memory, and supports optional X-Debug header for logging.
-    """
     session_id = req.session_id
     user_message = req.message.strip()
-    debug = (request.headers.get("X-Debug") or "").lower() == "true"
 
     messages = build_messages(session_id, user_message)
 
-    if debug:
-        print("==== X-Debug: PROMPT ====")
-        for m in messages:
-            role = m.get("role", "").upper()
-            content = m.get("content", "")
-            print(f"{role}: {content[:300]}")
-        print("==== END PROMPT ====")
-
-    full_chunks: List[str] = []
+    chunks: List[str] = []
 
     async def stream():
         try:
@@ -104,48 +82,43 @@ async def chat_endpoint(req: ChatRequest, request: Request):
                 model="gpt-4o-mini",
                 messages=messages,
                 temperature=0.7,
-                max_tokens=500,
+                max_tokens=450,
                 stream=True,
             )
 
             for chunk in completion:
-                delta = chunk.choices[0].delta if chunk.choices else None
-                text = ""
-                if delta:
-                    # depending on client version, delta may be dict-like
-                    text = getattr(delta, "content", None) or getattr(delta, "get", lambda *_: None)("content") or ""
-                    if isinstance(delta, dict):
-                        text = delta.get("content") or text
+                delta = chunk.choices[0].delta
+                if not delta:
+                    continue
 
+                text = getattr(delta, "content", None)
                 if not text:
                     continue
 
-                full_chunks.append(text)
+                chunks.append(text)
                 yield text
+
         except Exception as e:
-            print("Streaming error:", e)
-            yield "⚠️ I’m having a temporary issue. Please try again in a moment or "
-            yield "Book a 30-Minute Call."
+            print("STREAM ERROR:", e)
+            yield "I’m having a temporary issue — please try again in just a moment."
 
     async def wrapper():
-        # stream out to client
         async for piece in stream():
             yield piece
-        # when finished, commit to memory
-        reply_text = "".join(full_chunks).strip()
-        if reply_text:
-            commit_memory(session_id, user_message, reply_text)
+
+        final_reply = "".join(chunks).strip()
+        if final_reply:
+            commit_memory(session_id, user_message, final_reply)
 
     return StreamingResponse(wrapper(), media_type="text/plain; charset=utf-8")
 
 
 @router.post("/reset")
 async def reset_endpoint(req: ResetRequest):
-    """
-    Clears stored conversation memory for a given session_id.
-    Useful for demos or starting a fresh conversation.
-    """
     existed = req.session_id in MEMORY
     if existed:
-        MEMORY.pop(req.session_id, None)
-    return {"status": "reset" if existed else "not_found", "session_id": req.session_id}
+        MEMORY.pop(req.session_id)
+    return {
+        "status": "reset" if existed else "not_found",
+        "session_id": req.session_id
+    }
