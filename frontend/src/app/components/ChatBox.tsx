@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useRef, ChangeEvent, KeyboardEvent } from "react";
+import React, {
+    useState,
+    useEffect,
+    useRef,
+    ChangeEvent,
+    KeyboardEvent,
+} from "react";
 import MessageBubble from "./MessageBubble";
 import { motion } from "framer-motion";
 import { v4 as uuidv4 } from "uuid";
@@ -10,19 +16,22 @@ interface Message {
     text: string;
 }
 
+// Toggle this to true when you want backend prompt logging in the console
+const DEBUG = false;
+
+const INITIAL_GREETING =
+    "Hi there 👋 — I’m Samantha, the AI Receptionist for Great Owl Marketing! How can I assist you today?";
+
 export default function ChatBox() {
     const [messages, setMessages] = useState<Message[]>([
-        {
-            sender: "ai",
-            text: "Hi there 👋 — I’m Samantha, the AI Receptionist for Great Owl Marketing! How can I assist you today?",
-        },
+        { sender: "ai", text: INITIAL_GREETING },
     ]);
     const [input, setInput] = useState("");
     const [loading, setLoading] = useState(false);
     const chatEndRef = useRef<HTMLDivElement | null>(null);
     const [sessionId] = useState(() => uuidv4());
 
-    // Smooth scroll: on any change in list length OR while streaming (loading)
+    // Smooth scroll when messages change or while streaming
     useEffect(() => {
         const id = window.setTimeout(() => {
             chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -30,8 +39,10 @@ export default function ChatBox() {
         return () => window.clearTimeout(id);
     }, [messages.length, loading]);
 
-    // Detect rough tone to pace the typing feel
-    const detectTone = (text: string): "casual" | "formal" | "stressed" | "excited" | "neutral" => {
+    // Rough tone detector (for typing speed)
+    const detectTone = (
+        text: string
+    ): "casual" | "formal" | "stressed" | "excited" | "neutral" => {
         const t = text.toLowerCase();
         if (/(yo|hey|sup|lol|haha)/.test(t)) return "casual";
         if (/(good morning|dear|regards|sincerely)/.test(t)) return "formal";
@@ -40,8 +51,11 @@ export default function ChatBox() {
         return "neutral";
     };
 
-    // Stream reader → progressively update last AI message + autoscroll on each chunk
-    const streamAIResponse = async (reader: ReadableStreamDefaultReader, tone: string) => {
+    // Streaming from backend → progressively update last AI message
+    const streamAIResponse = async (
+        reader: ReadableStreamDefaultReader,
+        tone: string
+    ) => {
         const decoder = new TextDecoder();
         let partial = "";
 
@@ -65,12 +79,14 @@ export default function ChatBox() {
             setMessages((prev) => {
                 const copy = [...prev];
                 const last = copy[copy.length - 1];
-                if (last && last.sender === "ai") last.text = partial;
-                else copy.push({ sender: "ai", text: partial });
+                if (last && last.sender === "ai") {
+                    last.text = partial;
+                } else {
+                    copy.push({ sender: "ai", text: partial });
+                }
                 return copy;
             });
 
-            // keep the viewport glued to bottom during streaming
             chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
             await new Promise((r) => setTimeout(r, delay));
         }
@@ -80,7 +96,7 @@ export default function ChatBox() {
 
     const sendMessage = async () => {
         const text = input.trim();
-        if (!text) return;
+        if (!text || loading) return;
 
         const tone = detectTone(text);
         setMessages((prev) => [...prev, { sender: "user", text }]);
@@ -88,18 +104,28 @@ export default function ChatBox() {
         setLoading(true);
 
         try {
-            const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+            const API_URL =
+                process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+
+            const headers: HeadersInit = {
+                "Content-Type": "application/json",
+            };
+            if (DEBUG) headers["X-Debug"] = "true";
+
             const res = await fetch(`${API_URL}/api/chat`, {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers,
                 body: JSON.stringify({ message: text, session_id: sessionId }),
             });
 
-            // If server falls back to JSON for any reason, handle gracefully
             const contentType = res.headers.get("content-type") || "";
             if (contentType.includes("application/json")) {
+                // Fallback if backend ever returns JSON instead of streaming text
                 const data = await res.json();
-                const reply = typeof data.reply === "string" ? data.reply : JSON.stringify(data);
+                const reply =
+                    typeof data.reply === "string"
+                        ? data.reply
+                        : JSON.stringify(data, null, 2);
                 setMessages((prev) => [...prev, { sender: "ai", text: reply }]);
                 setLoading(false);
                 return;
@@ -109,10 +135,13 @@ export default function ChatBox() {
             if (reader) {
                 await streamAIResponse(reader, tone);
             } else {
-                // No body/reader – add a friendly fallback
                 setMessages((prev) => [
                     ...prev,
-                    { sender: "ai", text: "I’m here and ready to help! What would you like to do next?" },
+                    {
+                        sender: "ai",
+                        text:
+                            "I’m here and ready to help! What would you like to do next?",
+                    },
                 ]);
                 setLoading(false);
             }
@@ -130,6 +159,31 @@ export default function ChatBox() {
         }
     };
 
+    const resetChat = async () => {
+        try {
+            const API_URL =
+                process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+
+            const headers: HeadersInit = {
+                "Content-Type": "application/json",
+            };
+            if (DEBUG) headers["X-Debug"] = "true";
+
+            await fetch(`${API_URL}/api/reset`, {
+                method: "POST",
+                headers,
+                body: JSON.stringify({ session_id: sessionId }),
+            });
+        } catch (e) {
+            console.error("Reset error:", e);
+        }
+
+        // Reset local UI regardless of backend result
+        setMessages([{ sender: "ai", text: INITIAL_GREETING }]);
+        setInput("");
+        setLoading(false);
+    };
+
     const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
         if (e.key === "Enter") sendMessage();
     };
@@ -143,11 +197,21 @@ export default function ChatBox() {
                 className="w-full max-w-md bg-gray-900 text-white rounded-3xl shadow-lg overflow-hidden"
             >
                 {/* Header */}
-                <div className="bg-gradient-to-r from-blue-600 to-sky-500 p-4 text-center">
-                    <h1 className="text-lg font-semibold flex justify-center items-center gap-2">
-                        🤖 Great Owl Marketing
-                    </h1>
-                    <p className="text-sm opacity-90">Samantha — GOM AI Receptionist</p>
+                <div className="bg-gradient-to-r from-blue-600 to-sky-500 p-4 flex items-center justify-between">
+                    <div className="text-center flex-1">
+                        <h1 className="text-lg font-semibold flex justify-center items-center gap-2">
+                            🤖 Great Owl Marketing
+                        </h1>
+                        <p className="text-sm opacity-90">
+                            Samantha — GOM AI Receptionist
+                        </p>
+                    </div>
+                    <button
+                        onClick={resetChat}
+                        className="ml-2 text-xs bg-gray-900/40 hover:bg-gray-900/70 px-3 py-1 rounded-full border border-white/30"
+                    >
+                        Reset
+                    </button>
                 </div>
 
                 {/* Chat */}
@@ -174,7 +238,9 @@ export default function ChatBox() {
                         placeholder="Type your message..."
                         className="flex-1 bg-gray-700 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
                         value={input}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                            setInput(e.target.value)
+                        }
                         onKeyDown={onKey}
                     />
                     <button
