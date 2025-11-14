@@ -57,9 +57,42 @@ function TypeAnimation({ text }: { text: string }) {
   return <div dangerouslySetInnerHTML={{ __html: display }} />;
 }
 
+/** Async message formatter — safe for current marked API */
+async function formatMessage(raw: string): Promise<string> {
+    let s = raw;
+
+    const linkStyle =
+        'style="color:#38BDF8;text-decoration:underline;font-weight:600"';
+
+    s = s.replace(
+        /\bGreat Owl Marketing\b/gi,
+        `<a href="https://greatowlmarketing.com" target="_blank" rel="noopener noreferrer" ${linkStyle}>Great Owl Marketing</a>`
+    );
+
+    s = s.replace(
+        /\bHootbot\b/gi,
+        `<a href="https://m.me/593357600524046" target="_blank" rel="noopener noreferrer" ${linkStyle}>Meet Hootbot</a>`
+    );
+
+    s = s.replace(
+        /\bbook (?:a )?(?:30 ?-?minute|30 ?min|thirty ?minute) call\b/gi,
+        `<a href="https://calendly.com/greatowlmarketing/30min" target="_blank" rel="noopener noreferrer" ${linkStyle}>Book a 30-Minute Call</a>`
+    );
+
+    s = s.replace(
+        /\bPay Now\b/gi,
+        `<a href="https://buy.stripe.com/fZ6oH2nU2j83PreF00x200" target="_blank" rel="noopener noreferrer" ${linkStyle}>Pay Now</a>`
+    );
+
+    // ✅ Await the async marked parser
+    const html = await marked.parse(s);
+    return DOMPurify.sanitize(html);
+}
+
 export default function MessageBubble({ text, isAI = false }: MessageBubbleProps) {
   const [displayHTML, setDisplayHTML] = useState<string>("");
 
+<<<<<<< HEAD
   useEffect(() => {
     (async () => {
       const formatted = await formatMessage(text);
@@ -114,4 +147,45 @@ export default function MessageBubble({ text, isAI = false }: MessageBubbleProps
       </div>
     </motion.div>
   );
+=======
+    useEffect(() => {
+        async function renderHTML() {
+            const formatted = await formatMessage(text);
+            setDisplayHTML(formatted);
+        }
+        renderHTML();
+    }, [text]);
+
+    const bubbleStyle: React.CSSProperties = isAI
+        ? {
+            background:
+                'linear-gradient(145deg, rgba(29,78,216,1) 0%, rgba(14,165,233,1) 100%)',
+            color: '#fff',
+            borderRadius: 16,
+            padding: '12px 16px',
+            boxShadow: '0 6px 18px rgba(56,189,248,0.4)',
+        }
+        : {
+            background: '#1E293B',
+            color: '#F8FAFC',
+            borderRadius: 16,
+            padding: '12px 16px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+        };
+
+    return (
+        <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+            className={`my-2 flex ${isAI ? 'justify-start' : 'justify-end'}`}
+        >
+            <div
+                className="max-w-[80%] text-sm leading-relaxed rounded-2xl"
+                style={bubbleStyle}
+                dangerouslySetInnerHTML={{ __html: displayHTML }}
+            />
+        </motion.div>
+    );
+>>>>>>> 522ea37 (Quick commit on 2025-11-14 08:49 [branch: ])
 }

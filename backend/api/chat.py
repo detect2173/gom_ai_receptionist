@@ -1,59 +1,45 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
-from openai import OpenAI
-from backend.config import OPENAI_API_KEY
-import os
 
 router = APIRouter()
-client = OpenAI(api_key=OPENAI_API_KEY)
-
 
 class ChatRequest(BaseModel):
     message: str
 
-
-def load_knowledge():
-    """Reads the knowledge base text file and returns its content."""
-    knowledge_path = os.path.join(os.path.dirname(__file__), "..", "knowledge", "knowledge_base.txt")
-    try:
-        with open(knowledge_path, "r", encoding="utf-8") as f:
-            return f.read()
-    except FileNotFoundError:
-        return "No knowledge base found."
-
-
 @router.post("/chat")
 async def chat_endpoint(request: ChatRequest):
-    user_message = request.message.strip()
+    user_msg = request.message.strip().lower()
 
-    if not user_message:
-        raise HTTPException(status_code=400, detail="Message cannot be empty")
+    # Handle common greetings naturally
+    if user_msg in {"hi", "hello", "hey", "good morning", "good afternoon"}:
+        return {
+            "reply": "Hello there! 😊 I’m Samantha — your AI receptionist. How are you doing today?"
+        }
 
-    knowledge = load_knowledge()
+    # Handle thanks / politeness
+    elif "thank" in user_msg:
+        return {
+            "reply": "You're very welcome! Is there anything else I can help you with?"
+        }
 
-    # Combine user message with knowledge context
-    prompt = f"""
-    You are GOM AI Receptionist — a friendly, knowledgeable assistant for Great Owl Marketing.
-    Reference the information below to answer questions accurately and professionally.
+    # Handle business-related inquiries
+    elif any(word in user_msg for word in ["book", "schedule", "appointment", "meeting"]):
+        return {
+            "reply": "Sure thing! You can easily schedule a time using this link: [Book a 30 minute call](https://calendly.com/phineasjholdings-info/30min)"
+        }
 
-    === Knowledge Base ===
-    {knowledge}
+    elif any(word in user_msg for word in ["pay", "invoice", "payment"]):
+        return {
+            "reply": "No problem — you can take care of that right here: [Pay Now](https://buy.stripe.com/fZu6oH2nU2j83PreF00x200)"
+        }
 
-    === User Message ===
-    {user_message}
-    """
+    elif any(word in user_msg for word in ["hootbot", "demo", "chatbot"]):
+        return {
+            "reply": "You can try a live demo anytime here: [Meet Hootbot](https://m.me/593357600524046)"
+        }
 
-    try:
-        completion = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system",
-                 "content": "You are Samantha, the AI Receptionist for Great Owl Marketing. Be concise, polite, and professional."},
-                {"role": "user", "content": prompt},
-            ],
-        )
-        reply = completion.choices[0].message.content
-        return {"reply": reply}
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    # Fallback: general conversational tone
+    else:
+        return {
+            "reply": "I'm happy to help! Could you tell me a little more about what you’re looking for?"
+        }
