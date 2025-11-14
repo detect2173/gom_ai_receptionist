@@ -2,260 +2,190 @@
 
 import React, { useState, useEffect, useRef, ChangeEvent, KeyboardEvent } from "react";
 import MessageBubble from "./MessageBubble";
-
-/** Typing indicator (animated bouncing dots) */
-const TypingIndicator = () => (
-    <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ duration: 0.2 }}
-        style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "0.4rem",
-            marginLeft: "0.75rem",
-            marginTop: "0.5rem",
-        }}
-    >
-        <div className="w-2 h-2 bg-sky-400 rounded-full animate-bounce" />
-        <div className="w-2 h-2 bg-sky-400 rounded-full animate-bounce delay-150" />
-        <div className="w-2 h-2 bg-sky-400 rounded-full animate-bounce delay-300" />
-    </motion.div>
-);
+import { motion } from "framer-motion";
+import { v4 as uuidv4 } from "uuid";
 
 interface Message {
-  sender: "user" | "ai";
-  text: string;
+    sender: "user" | "ai";
+    text: string;
 }
 
 export default function ChatBox() {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      sender: "ai",
-      text: "Hi there 👋 — I’m Samantha, the AI Receptionist for Great Owl Marketing! How can I assist you today?",
-    },
-  ]);
-  const [input, setInput] = useState("");
-  const chatEndRef = useRef<HTMLDivElement | null>(null);
+    const [messages, setMessages] = useState<Message[]>([
+        {
+            sender: "ai",
+            text: "Hi there 👋 — I’m Samantha, the AI Receptionist for Great Owl Marketing! How can I assist you today?",
+        },
+    ]);
+    const [input, setInput] = useState("");
+    const [loading, setLoading] = useState(false);
+    const chatEndRef = useRef<HTMLDivElement | null>(null);
+    const [sessionId] = useState(() => uuidv4());
 
-<<<<<<< HEAD
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-=======
-    // Auto-scroll when messages update or loading toggles
+    // Smooth scroll: on any change in list length OR while streaming (loading)
     useEffect(() => {
-        bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [messages, loading]);
->>>>>>> 522ea37 (Quick commit on 2025-11-14 08:49 [branch: ])
+        const id = window.setTimeout(() => {
+            chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+        }, 30);
+        return () => window.clearTimeout(id);
+    }, [messages.length, loading]);
 
-  async function sendMessage() {
-    const userMessage = input.trim();
-    if (!userMessage) return;
+    // Detect rough tone to pace the typing feel
+    const detectTone = (text: string): "casual" | "formal" | "stressed" | "excited" | "neutral" => {
+        const t = text.toLowerCase();
+        if (/(yo|hey|sup|lol|haha)/.test(t)) return "casual";
+        if (/(good morning|dear|regards|sincerely)/.test(t)) return "formal";
+        if (/(frustrated|angry|mad|upset|behind|late)/.test(t)) return "stressed";
+        if (/(awesome|great|amazing|excited|love|wow)/.test(t)) return "excited";
+        return "neutral";
+    };
 
-    setMessages((prev) => [...prev, { sender: "user", text: userMessage }]);
-    setInput("");
+    // Stream reader → progressively update last AI message + autoscroll on each chunk
+    const streamAIResponse = async (reader: ReadableStreamDefaultReader, tone: string) => {
+        const decoder = new TextDecoder();
+        let partial = "";
 
-    try {
-      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+        const speedMap: Record<string, number> = {
+            casual: 18,
+            excited: 14,
+            neutral: 28,
+            stressed: 42,
+            formal: 55,
+        };
+        const delay = speedMap[tone] ?? 28;
 
-      const response = await fetch(`${API_URL}/api/chat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: userMessage }),
-      });
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-<<<<<<< HEAD
-      if (!response.ok) throw new Error(`HTTP error! ${response.status}`);
-      const data = await response.json();
+            const chunk = decoder.decode(value, { stream: true });
+            if (!chunk) continue;
+            partial += chunk;
 
-      setMessages((prev) => [...prev, { sender: "ai", text: data.reply }]);
-    } catch (err) {
-      console.error("Error:", err);
-      setMessages((prev) => [
-        ...prev,
-        { sender: "ai", text: "Sorry, I encountered a small hiccup. Could you try again?" },
-      ]);
-    }
-  }
-=======
-            const aiMessage: Message = {
-                sender: "ai",
-                text:
-                    data.reply ||
-                    "I'm here to help with anything related to Great Owl Marketing!",
-            };
+            setMessages((prev) => {
+                const copy = [...prev];
+                const last = copy[copy.length - 1];
+                if (last && last.sender === "ai") last.text = partial;
+                else copy.push({ sender: "ai", text: partial });
+                return copy;
+            });
 
-            setMessages((prev) => [...prev, aiMessage]);
-        } catch (error) {
-            console.error("Chat error:", error);
+            // keep the viewport glued to bottom during streaming
+            chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+            await new Promise((r) => setTimeout(r, delay));
+        }
+
+        setLoading(false);
+    };
+
+    const sendMessage = async () => {
+        const text = input.trim();
+        if (!text) return;
+
+        const tone = detectTone(text);
+        setMessages((prev) => [...prev, { sender: "user", text }]);
+        setInput("");
+        setLoading(true);
+
+        try {
+            const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+            const res = await fetch(`${API_URL}/api/chat`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: text, session_id: sessionId }),
+            });
+
+            // If server falls back to JSON for any reason, handle gracefully
+            const contentType = res.headers.get("content-type") || "";
+            if (contentType.includes("application/json")) {
+                const data = await res.json();
+                const reply = typeof data.reply === "string" ? data.reply : JSON.stringify(data);
+                setMessages((prev) => [...prev, { sender: "ai", text: reply }]);
+                setLoading(false);
+                return;
+            }
+
+            const reader = res.body?.getReader();
+            if (reader) {
+                await streamAIResponse(reader, tone);
+            } else {
+                // No body/reader – add a friendly fallback
+                setMessages((prev) => [
+                    ...prev,
+                    { sender: "ai", text: "I’m here and ready to help! What would you like to do next?" },
+                ]);
+                setLoading(false);
+            }
+        } catch (e) {
+            console.error("Chat error:", e);
             setMessages((prev) => [
                 ...prev,
                 {
                     sender: "ai",
                     text:
-                        "⚠️ Sorry, I’m having trouble reaching my system right now. Please visit [Great Owl Marketing](https://greatowlmarketing.com) for more information.",
+                        "⚠️ I’m having trouble reaching my system right now. Please try again shortly or book a quick call: Book a 30-Minute Call.",
                 },
             ]);
-        } finally {
             setLoading(false);
         }
     };
->>>>>>> 522ea37 (Quick commit on 2025-11-14 08:49 [branch: ])
 
-  const handleKeyPress = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Enter") sendMessage();
-  };
+    const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
+        if (e.key === "Enter") sendMessage();
+    };
 
-<<<<<<< HEAD
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
-      <div className="w-full max-w-2xl bg-white rounded-3xl shadow-xl border border-gray-200 flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="text-center py-3 border-b border-gray-200">
-          <h1 className="text-lg font-semibold flex justify-center items-center gap-2">
-            🤖 Great Owl Marketing
-          </h1>
-          <p className="text-gray-600 text-sm">Samantha — GOM AI Receptionist</p>
-=======
     return (
-        <div
-            style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: "1rem",
-                marginTop: "2rem",
-            }}
-        >
-            {/* Title Section */}
-            <div style={{ textAlign: "center", marginBottom: "0.5rem" }}>
-                <h1
-                    style={{
-                        fontSize: "2rem",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        gap: "0.5rem",
-                        color: "#fff",
-                    }}
-                >
-                    🤖 Great Owl Marketing
-                </h1>
-                <p style={{ fontSize: "1rem", color: "#9CA3AF" }}>
-                    Samantha — GOM AI Receptionist
-                </p>
-            </div>
-
-            {/* Chat Window */}
+        <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
             <motion.div
-                initial={{ opacity: 0, scale: 0.98 }}
-                animate={{ opacity: 1, scale: 1 }}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.3 }}
-                style={{
-                    background: "#0F172A", // slate-900
-                    padding: "1.5rem",
-                    borderRadius: "16px",
-                    boxShadow: "0 10px 28px rgba(37,99,235,0.25)",
-                    width: "90%",
-                    maxWidth: "480px",
-                    display: "flex",
-                    flexDirection: "column",
-                    justifyContent: "space-between",
-                    minHeight: "480px",
-                    maxHeight: "600px",
-                    overflowY: "auto",
-                }}
+                className="w-full max-w-md bg-gray-900 text-white rounded-3xl shadow-lg overflow-hidden"
             >
-                <div style={{ flexGrow: 1 }}>
-                    {messages.map((msg, idx) => (
-                        <motion.div
-                            key={idx}
-                            initial={{ opacity: 0, y: 10 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.25 }}
-                        >
-                            <MessageBubble
-                                text={msg.text}
-                                isAI={msg.sender === "ai"}
-                            />
-                        </motion.div>
-                    ))}
-
-                    {loading && <TypingIndicator />}
-                    <div ref={bottomRef} />
+                {/* Header */}
+                <div className="bg-gradient-to-r from-blue-600 to-sky-500 p-4 text-center">
+                    <h1 className="text-lg font-semibold flex justify-center items-center gap-2">
+                        🤖 Great Owl Marketing
+                    </h1>
+                    <p className="text-sm opacity-90">Samantha — GOM AI Receptionist</p>
                 </div>
 
-                {/* Input Section */}
-                <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem" }}>
+                {/* Chat */}
+                <div className="flex flex-col space-y-3 p-4 overflow-y-auto max-h-[520px]">
+                    {messages.map((m, i) => (
+                        <MessageBubble key={i} text={m.text} isAI={m.sender === "ai"} />
+                    ))}
+                    {loading && (
+                        <motion.div
+                            animate={{ opacity: [0.5, 1, 0.5] }}
+                            transition={{ duration: 1.2, repeat: Infinity }}
+                            className="text-sky-400 italic text-sm px-2"
+                        >
+                            Samantha is typing…
+                        </motion.div>
+                    )}
+                    <div ref={chatEndRef} />
+                </div>
+
+                {/* Input */}
+                <div className="flex items-center p-3 bg-gray-800 border-t border-gray-700">
                     <input
                         type="text"
                         placeholder="Type your message..."
+                        className="flex-1 bg-gray-700 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
                         value={input}
-                        onChange={(e) => setInput(e.target.value)}
-                        onKeyDown={handleKeyDown}
-                        style={{
-                            flex: 1,
-                            padding: "0.75rem 1rem",
-                            borderRadius: "8px",
-                            border: "none",
-                            outline: "none",
-                            background: "#1E293B",
-                            color: "#fff",
-                            boxShadow: "inset 0 0 4px rgba(255,255,255,0.05)",
-                        }}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
+                        onKeyDown={onKey}
                     />
                     <button
-                        onClick={handleSend}
+                        onClick={sendMessage}
                         disabled={loading}
-                        style={{
-                            background: loading
-                                ? "linear-gradient(90deg, #0EA5E9 0%, #3B82F6 100%)"
-                                : "linear-gradient(90deg, #2563EB 0%, #3B82F6 100%)",
-                            color: "#fff",
-                            border: "none",
-                            padding: "0.75rem 1.2rem",
-                            borderRadius: "8px",
-                            cursor: "pointer",
-                            fontWeight: 600,
-                            boxShadow: "0 4px 14px rgba(59,130,246,0.3)",
-                            transition: "all 0.2s ease",
-                            opacity: loading ? 0.6 : 1,
-                        }}
+                        className="ml-2 bg-sky-600 hover:bg-sky-700 px-4 py-2 rounded-lg font-semibold disabled:opacity-50"
                     >
-                        {loading ? "..." : "Send"}
+                        Send
                     </button>
                 </div>
             </motion.div>
->>>>>>> 522ea37 (Quick commit on 2025-11-14 08:49 [branch: ])
         </div>
-
-        {/* Chat window */}
-        <div className="flex-1 p-4 overflow-y-auto space-y-3 bg-black">
-          {messages.map((msg, index) => (
-            <MessageBubble key={index} text={msg.text} isAI={msg.sender === "ai"} />
-          ))}
-          <div ref={chatEndRef} />
-        </div>
-
-        {/* Input area */}
-        <div className="flex items-center border-t border-gray-200 p-3 bg-black">
-          <input
-            type="text"
-            placeholder="Type your message..."
-            className="flex-1 p-2 rounded-lg bg-neutral-900 text-white border border-neutral-700 focus:outline-none focus:ring-2 focus:ring-sky-500"
-            value={input}
-            onChange={(e: ChangeEvent<HTMLInputElement>) => setInput(e.target.value)}
-            onKeyDown={handleKeyPress}
-          />
-          <button
-            onClick={sendMessage}
-            className="ml-2 px-4 py-2 bg-sky-600 hover:bg-sky-700 rounded-lg text-white font-medium"
-          >
-            Send
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+    );
 }

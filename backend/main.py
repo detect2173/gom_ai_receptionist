@@ -1,54 +1,104 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-import logging
+from pydantic import BaseModel
+from openai import OpenAI
+from dotenv import load_dotenv
+from pathlib import Path
 import os
 
-# ----- Logging -----
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-)
-logger = logging.getLogger("gom.ai_receptionist")
+# -----------------------------------------------------------
+# Load .env from project root (one level up)
+# -----------------------------------------------------------
+ROOT_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(dotenv_path=ROOT_DIR / ".env")
 
-# ----- App -----
-app = FastAPI(title="GOM AI Receptionist API", version="0.1.0")
+# -----------------------------------------------------------
+# Initialize FastAPI
+# -----------------------------------------------------------
+app = FastAPI(title="GOM AI Receptionist API")
 
-# CORS (adjust origins for prod)
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ----- Models -----
+# -----------------------------------------------------------
+# Models and OpenAI setup
+# -----------------------------------------------------------
 class ChatRequest(BaseModel):
-    message: str = Field(..., min_length=1, description="User message")
+    message: str
 
-class ChatResponse(BaseModel):
-    reply: str
 
-# ----- Routes -----
-@app.get("/healthz")
-def healthz():
-    return {"status": "ok"}
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
-@app.post("/api/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest):
-    msg = req.message.strip()
-    if not msg:
-        raise HTTPException(status_code=400, detail="Message cannot be empty.")
+SYSTEM_PROMPT = """
+You are Samantha, the friendly and professional AI Receptionist for Great Owl Marketing.
+Your tone is natural, warm, and conversational — never robotic or repetitive.
+You assist with scheduling, payments, demos, and services.
+Avoid repeating user input, and don't list multiple links unless asked directly.
+Keep messages concise and human-like.
+"""
 
-    logger.info("Incoming message: %s", msg)
+# -----------------------------------------------------------
+# Chat endpoint
+# -----------------------------------------------------------
+@app.post("/api/chat")
+async def chat_endpoint(request: ChatRequest):
+    user_msg = request.message.strip().lower()
 
-    # TODO: Replace with your real response generator
-    reply = (
-        "Hello! I'm doing great, thanks for asking. "
-        "How can I assist you today? (Payments: 'Pay Now', Demos: 'Meet Hootbot', Scheduling: 'Book a 30 minute call')"
-    )
+    # Quick rule-based responses for local feel
+    if user_msg in {"hi", "hello", "hey", "good morning", "good afternoon"}:
+        return {"reply": "Hi there! 👋 I’m Samantha — your AI receptionist. How are you today?"}
 
-    logger.info("Reply: %s", reply)
-    return ChatResponse(reply=reply)
+    if "thank" in user_msg:
+        return {"reply": "You're very welcome! Is there anything else I can help you with?"}
+
+    if any(word in user_msg for word in ["book", "schedule", "appointment", "meeting"]):
+        return {"reply": "Sure! You can schedule a time here: [Book a 30-minute call](https://calendly.com/phineasjholdings-info/30min)"}
+
+    if any(word in user_msg for word in ["pay", "invoice", "payment"]):
+        return {"reply": "No problem — you can make your payment securely here: [Pay Now](https://buy.stripe.com/fZu6oH2nU2j83PreF00x200)"}
+
+    if any(word in user_msg for word in ["hootbot", "demo", "chatbot"]):
+        return {"reply": "You can try our demo chatbot anytime: [Meet Hootbot](https://m.me/593357600524046)"}
+
+    # Fallback if no API key is present
+    if not client:
+        return {
+            "reply": "Hi there! I’m Samantha, but it seems my AI service is offline. I can still help with basic info if you’d like!"
+        }
+
+    # Live AI response
+    try:
+        completion = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT.strip()},
+                {"role": "user", "content": request.message},
+            ],
+            temperature=0.7,
+            max_tokens=200,
+        )
+
+        reply = completion.choices[0].message.content.strip()
+        return {"reply": reply}
+
+    except Exception as e:
+        print("OpenAI error:", e)
+        raise HTTPException(status_code=500, detail="AI response generation failed")
+
+
+# -----------------------------------------------------------
+# Health check endpoint
+# -----------------------------------------------------------
+@app.get("/api/health")
+def health_check():
+    return {
+        "status": "ok",
+        "ai_connected": bool(OPENAI_API_KEY),
+        "cwd": str(ROOT_DIR),
+    }
