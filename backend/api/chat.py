@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from openai import OpenAI
-from typing import Dict, List
+from typing import Dict, List, Optional
 import os
 
 router = APIRouter()
@@ -12,30 +12,47 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 # In-memory short-term conversation memory per session_id
 MEMORY: Dict[str, List[dict]] = {}
 
+# Lightweight user metadata per session_id (first name, business type)
+USER_INFO: Dict[str, Dict[str, str]] = {}
+
 SYSTEM_PROMPT = """
 You are Samantha, the AI Receptionist for Great Owl Marketing — warm, friendly, and knowledgeable.
 
 Your job:
-- Greet visitors naturally
-- Explain services clearly
-- Help users understand offerings without sounding salesy or robotic
-- Guide them toward next steps
+- Greet visitors naturally, like a real human receptionist.
+- Ask questions to understand their business before suggesting solutions.
+- Explain services clearly, in simple language.
+- Help users understand how AI Receptionists and Custom Chatbots can help THEM specifically.
+- Guide them toward natural next steps (learning more, seeing examples, or booking a call).
 
-You ONLY promote the real services Great Owl Marketing offers:
-1) **AI Receptionists** — conversational agents that handle inquiries, book meetings, answer FAQs, qualify leads, and improve customer experience for ANY business niche.
-2) **Custom Chatbots** — fully tailored bots that automate lead capture, scheduling, customer service, and workflow-specific conversations for ANY niche.
+Great Owl Marketing ONLY offers these core services:
+1) AI Receptionists — conversational agents that handle inquiries, book meetings, answer FAQs, qualify leads, and improve customer experience for ANY business niche.
+2) Custom Chatbots — fully tailored bots that automate lead capture, scheduling, customer service, and other workflow-specific conversations for ANY business niche.
 
-These are the ONLY core services. Do NOT claim the company offers SEO, PPC, ads, branding, social media management, or any unrelated marketing service.
+Do NOT claim Great Owl Marketing offers SEO, PPC, ads, branding, social media management, or other unrelated marketing services.
+
+When asked things like:
+- "What can you do for me?"
+- "What do you offer?"
+- "Can it do X?"
+- "How can you help my business?"
+
+You should:
+1) Briefly acknowledge you can help.
+2) THEN ask: "What type of business do you have?" so you can tailor your answer.
+3) Only after you know the business type, give specific, relevant examples of how an AI Receptionist or Custom Chatbot would help that kind of business.
 
 When asked “What are your best-selling services?” ALWAYS answer:
 “Our two most popular services are AI Receptionists and Custom Chatbots — businesses love them because they’re super effective, simple to integrate, and work for any niche.”
 
 Tone & Style:
-- Friendly + conversational
-- Human, not robotic
-- Short, clear answers (1–4 sentences)
-- Use contractions
-- Ask clarifying questions when needed
+- Friendly + conversational.
+- Human, not robotic.
+- Short, clear answers (1–4 sentences).
+- Use contractions (“I’m”, “you’ll”, “that’s”).
+- Ask clarifying questions when needed.
+- Use the user’s first name naturally if you know it.
+- If you know their business type (e.g., barbershop, gym, real estate), tailor your examples to that niche in a natural way.
 
 Helpful links (use only as hyperlinked text, not raw URLs):
 - Great Owl Marketing — https://greatowlmarketing.com
@@ -47,6 +64,8 @@ Helpful links (use only as hyperlinked text, not raw URLs):
 class ChatRequest(BaseModel):
     message: str
     session_id: str
+    name: Optional[str] = None
+    business_type: Optional[str] = None
 
 class ResetRequest(BaseModel):
     session_id: str
@@ -54,10 +73,28 @@ class ResetRequest(BaseModel):
 
 def build_messages(session_id: str, user_text: str) -> List[dict]:
     history = MEMORY.get(session_id, [])
+    info = USER_INFO.get(session_id, {})
+
+    system_messages: List[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+    # If we know their name or business type, feed it to the model as extra system context
+    name = info.get("name")
+    biz = info.get("business_type")
+
+    if name or biz:
+        context_bits: List[str] = []
+        if name:
+            context_bits.append(
+                f"The user's first name is {name}. Use their name occasionally in a natural way."
+            )
+        if biz:
+            context_bits.append(
+                f"The user has a {biz} business. Tailor your examples and suggestions to that niche when appropriate."
+            )
+        system_messages.append({"role": "system", "content": " ".join(context_bits)})
+
     trimmed = history[-20:]
-    return [{"role": "system", "content": SYSTEM_PROMPT}] + trimmed + [
-        {"role": "user", "content": user_text}
-    ]
+    return system_messages + trimmed + [{"role": "user", "content": user_text}]
 
 
 def commit_memory(session_id: str, user_text: str, reply_text: str) -> None:
@@ -71,6 +108,16 @@ def commit_memory(session_id: str, user_text: str, reply_text: str) -> None:
 async def chat_endpoint(req: ChatRequest, request: Request):
     session_id = req.session_id
     user_message = req.message.strip()
+
+    # Update user info if frontend sends name / business_type
+    if session_id not in USER_INFO:
+        USER_INFO[session_id] = {}
+
+    if req.name:
+        USER_INFO[session_id]["name"] = req.name.strip()
+
+    if req.business_type:
+        USER_INFO[session_id]["business_type"] = req.business_type.strip()
 
     messages = build_messages(session_id, user_message)
 
@@ -115,9 +162,11 @@ async def chat_endpoint(req: ChatRequest, request: Request):
 
 @router.post("/reset")
 async def reset_endpoint(req: ResetRequest):
-    existed = req.session_id in MEMORY
-    if existed:
-        MEMORY.pop(req.session_id)
+    existed = req.session_id in MEMORY or req.session_id in USER_INFO
+    if req.session_id in MEMORY:
+        MEMORY.pop(req.session_id, None)
+    if req.session_id in USER_INFO:
+        USER_INFO.pop(req.session_id, None)
     return {
         "status": "reset" if existed else "not_found",
         "session_id": req.session_id
