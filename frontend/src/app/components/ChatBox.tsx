@@ -11,41 +11,64 @@ import MessageBubble from "./MessageBubble";
 import { motion } from "framer-motion";
 import { v4 as uuidv4 } from "uuid";
 
+// ------------------------------------------------------------
+// Types
+// ------------------------------------------------------------
 interface Message {
     sender: "user" | "ai";
     text: string;
 }
 
-const DEBUG = false;
-
-// LocalStorage keys
+// ------------------------------------------------------------
+// LocalStorage Keys
+// ------------------------------------------------------------
 const NAME_KEY = "gom_first_name";
 const BIZ_KEY = "gom_business_type";
 
+// ------------------------------------------------------------
+// Component
+// ------------------------------------------------------------
 export default function ChatBox() {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState("");
     const [loading, setLoading] = useState(false);
-    const chatEndRef = useRef<HTMLDivElement | null>(null);
-    const [sessionId] = useState(() => uuidv4());
-    const [firstName, setFirstName] = useState<string | null>(null);
-    const [businessType, setBusinessType] = useState<string | null>(null);
 
-    // On mount: load name + business from localStorage, set initial greeting
+    const chatEndRef = useRef<HTMLDivElement | null>(null);
+
+    // Unique session ID
+    const [sessionId] = useState(() => uuidv4());
+
+    // Persistent personalization fields
+    const [firstName, setFirstName] = useState<string | null>(() => {
+        if (typeof window !== "undefined") {
+            return window.localStorage.getItem(NAME_KEY);
+        }
+        return null;
+    });
+
+    const [businessType, setBusinessType] = useState<string | null>(() => {
+        if (typeof window !== "undefined") {
+            return window.localStorage.getItem(BIZ_KEY);
+        }
+        return null;
+    });
+
+    // ------------------------------------------------------------
+    // Initial Greeting (Runs ONCE)
+    // ------------------------------------------------------------
     useEffect(() => {
         if (typeof window === "undefined") return;
 
+        // Pull latest values from localStorage (safe + reliable)
         const storedName = window.localStorage.getItem(NAME_KEY);
         const storedBiz = window.localStorage.getItem(BIZ_KEY);
 
-        setFirstName(storedName);
-        setBusinessType(storedBiz);
-
         let greeting: string;
+
         if (storedName && storedBiz) {
-            greeting = `Welcome back, ${storedName}! How's the ${storedBiz} business going lately?`;
+            greeting = `Welcome back, ${storedName}! How’s everything going with the ${storedBiz}?`;
         } else if (storedName) {
-            greeting = `Welcome back, ${storedName}! How can I help you today?`;
+            greeting = `Welcome back, ${storedName}! What can I help you with today?`;
         } else {
             greeting =
                 "Hi there 👋 — I’m Samantha, the AI Receptionist for Great Owl Marketing! How can I assist you today?";
@@ -54,15 +77,22 @@ export default function ChatBox() {
         setMessages([{ sender: "ai", text: greeting }]);
     }, []);
 
-    // Smooth autoscroll
+    // ------------------------------------------------------------
+    // Smooth Auto-Scroll
+    // ------------------------------------------------------------
     useEffect(() => {
         const t = window.setTimeout(() => {
-            chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+            chatEndRef.current?.scrollIntoView({
+                behavior: "smooth",
+                block: "end",
+            });
         }, 40);
         return () => window.clearTimeout(t);
     }, [messages.length, loading]);
 
-    // Tone detection for typing speed
+    // ------------------------------------------------------------
+    // Tone detection for streaming speed
+    // ------------------------------------------------------------
     const detectTone = (
         text: string
     ): "casual" | "formal" | "stressed" | "excited" | "neutral" => {
@@ -74,7 +104,9 @@ export default function ChatBox() {
         return "neutral";
     };
 
-    // Simple first-name extractor
+    // ------------------------------------------------------------
+    // Extract first name
+    // ------------------------------------------------------------
     const extractFirstName = (text: string): string | null => {
         const patterns = [
             /\bmy name is\s+([A-Za-z]+)/i,
@@ -82,6 +114,7 @@ export default function ChatBox() {
             /\bi'm\s+([A-Za-z]+)/i,
             /\bcall me\s+([A-Za-z]+)/i,
         ];
+
         for (const re of patterns) {
             const match = text.match(re);
             if (match && match[1]) {
@@ -92,7 +125,9 @@ export default function ChatBox() {
         return null;
     };
 
-    // Simple business-type extractor (very heuristic, good enough for now)
+    // ------------------------------------------------------------
+    // Extract business type
+    // ------------------------------------------------------------
     const extractBusinessType = (text: string): string | null => {
         const patterns = [
             /\bi (run|own|have)\s+(a|an)?\s*([^.,!?]+)/i,
@@ -103,20 +138,16 @@ export default function ChatBox() {
         for (const re of patterns) {
             const match = text.match(re);
             if (match) {
-                const biz =
-                    match[3] ||
-                    match[2] ||
-                    match[4]; // try last meaningful capture group
-                if (biz) {
-                    const cleaned = biz.replace(/^(a|an)\s+/i, "").trim();
-                    return cleaned;
-                }
+                const biz = match[3] || match[2] || match[4];
+                if (biz) return biz.replace(/^(a|an)\s+/i, "").trim();
             }
         }
         return null;
     };
 
-    // Stream AI response from backend
+    // ------------------------------------------------------------
+    // Stream AI response
+    // ------------------------------------------------------------
     const streamAIResponse = async (
         reader: ReadableStreamDefaultReader,
         tone: string
@@ -131,6 +162,7 @@ export default function ChatBox() {
             stressed: 42,
             formal: 55,
         };
+
         const delay = speedMap[tone] ?? 28;
 
         while (true) {
@@ -139,55 +171,55 @@ export default function ChatBox() {
 
             const chunk = decoder.decode(value, { stream: true });
             if (!chunk) continue;
+
             partial += chunk;
 
             setMessages((prev) => {
                 const copy = [...prev];
                 const last = copy[copy.length - 1];
+
                 if (last?.sender === "ai") {
                     last.text = partial;
                 } else {
                     copy.push({ sender: "ai", text: partial });
                 }
+
                 return copy;
             });
 
-            chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
             await new Promise((r) => setTimeout(r, delay));
         }
 
         setLoading(false);
     };
 
+    // ------------------------------------------------------------
+    // Send user message
+    // ------------------------------------------------------------
     const sendMessage = async () => {
         const text = input.trim();
         if (!text || loading) return;
 
-        // Detect tone, name, and business type from this message
         const tone = detectTone(text);
 
+        // Extract name + business type once
         let updatedName = firstName;
         let updatedBusinessType = businessType;
 
-        const extractedName = extractFirstName(text);
-        if (extractedName && !updatedName) {
-            updatedName = extractedName;
-            setFirstName(extractedName);
-            if (typeof window !== "undefined") {
-                window.localStorage.setItem(NAME_KEY, extractedName);
-            }
+        const maybeName = extractFirstName(text);
+        if (maybeName && !updatedName) {
+            updatedName = maybeName;
+            setFirstName(maybeName);
+            window.localStorage.setItem(NAME_KEY, maybeName);
         }
 
-        const extractedBiz = extractBusinessType(text);
-        if (extractedBiz && !updatedBusinessType) {
-            updatedBusinessType = extractedBiz;
-            setBusinessType(extractedBiz);
-            if (typeof window !== "undefined") {
-                window.localStorage.setItem(BIZ_KEY, extractedBiz);
-            }
+        const maybeBiz = extractBusinessType(text);
+        if (maybeBiz && !updatedBusinessType) {
+            updatedBusinessType = maybeBiz;
+            setBusinessType(maybeBiz);
+            window.localStorage.setItem(BIZ_KEY, maybeBiz);
         }
 
-        // Push user message into chat
         setMessages((prev) => [...prev, { sender: "user", text }]);
         setInput("");
         setLoading(true);
@@ -196,14 +228,11 @@ export default function ChatBox() {
             const API_URL =
                 process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-            const headers: HeadersInit = {
-                "Content-Type": "application/json",
-            };
-            if (DEBUG) headers["X-Debug"] = "true";
-
             const res = await fetch(`${API_URL}/api/chat`, {
                 method: "POST",
-                headers,
+                headers: {
+                    "Content-Type": "application/json",
+                },
                 body: JSON.stringify({
                     message: text,
                     session_id: sessionId,
@@ -213,17 +242,21 @@ export default function ChatBox() {
             });
 
             const contentType = res.headers.get("content-type") || "";
+
+            // Non-stream fallback
             if (contentType.includes("application/json")) {
                 const data = await res.json();
                 const reply =
                     typeof data.reply === "string"
                         ? data.reply
                         : JSON.stringify(data, null, 2);
+
                 setMessages((prev) => [...prev, { sender: "ai", text: reply }]);
                 setLoading(false);
                 return;
             }
 
+            // Streaming enabled
             const reader = res.body?.getReader();
             if (reader) {
                 await streamAIResponse(reader, tone);
@@ -251,6 +284,9 @@ export default function ChatBox() {
         }
     };
 
+    // ------------------------------------------------------------
+    // Reset chat (keeps name + business)
+    // ------------------------------------------------------------
     const resetChat = async () => {
         try {
             const API_URL =
@@ -265,7 +301,6 @@ export default function ChatBox() {
             console.error("Reset error:", e);
         }
 
-        // Keep name + business for personalization, just reset conversation
         const storedName =
             typeof window !== "undefined"
                 ? window.localStorage.getItem(NAME_KEY)
@@ -276,8 +311,9 @@ export default function ChatBox() {
                 : businessType;
 
         let greeting: string;
+
         if (storedName && storedBiz) {
-            greeting = `Welcome back, ${storedName}! How's the ${storedBiz} business going lately?`;
+            greeting = `Welcome back, ${storedName}! How’s everything going with the ${storedBiz}?`;
         } else if (storedName) {
             greeting = `Welcome back, ${storedName}! How can I help you today?`;
         } else {
@@ -290,10 +326,9 @@ export default function ChatBox() {
         setLoading(false);
     };
 
-    const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-        if (e.key === "Enter") sendMessage();
-    };
-
+    // ------------------------------------------------------------
+    // Render
+    // ------------------------------------------------------------
     return (
         <div className="flex flex-col items-center min-h-screen bg-gray-50 p-4">
             <div className="w-full max-w-md rounded-3xl bg-gray-900 text-white shadow-xl overflow-hidden">
@@ -301,8 +336,11 @@ export default function ChatBox() {
                 <div className="flex justify-between items-center bg-gradient-to-r from-blue-600 to-sky-500 px-4 py-3">
                     <div className="text-center flex-1">
                         <h1 className="text-lg font-semibold">🤖 Great Owl Marketing</h1>
-                        <p className="text-sm opacity-90">Samantha — AI Receptionist</p>
+                        <p className="text-sm opacity-90">
+                            Samantha — AI Receptionist
+                        </p>
                     </div>
+
                     <button
                         onClick={resetChat}
                         className="text-xs bg-white/20 hover:bg-white/30 px-3 py-1 rounded-full"
@@ -314,7 +352,11 @@ export default function ChatBox() {
                 {/* CHAT WINDOW */}
                 <div className="p-4 space-y-3 max-h-[520px] overflow-y-auto">
                     {messages.map((m, i) => (
-                        <MessageBubble key={i} text={m.text} isAI={m.sender === "ai"} />
+                        <MessageBubble
+                            key={i}
+                            text={m.text}
+                            isAI={m.sender === "ai"}
+                        />
                     ))}
 
                     {loading && (
@@ -326,6 +368,7 @@ export default function ChatBox() {
                             Samantha is typing…
                         </motion.div>
                     )}
+
                     <div ref={chatEndRef} />
                 </div>
 
@@ -337,12 +380,15 @@ export default function ChatBox() {
                         onChange={(e: ChangeEvent<HTMLInputElement>) =>
                             setInput(e.target.value)
                         }
-                        onKeyDown={onKeyDown}
+                        onKeyDown={(e: KeyboardEvent<HTMLInputElement>) => {
+                            if (e.key === "Enter") void sendMessage();
+                        }}
                         placeholder="Type your message..."
                         className="flex-1 bg-gray-700 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500"
                     />
+
                     <button
-                        onClick={sendMessage}
+                        onClick={() => void sendMessage()}
                         disabled={loading}
                         className="ml-2 bg-sky-600 hover:bg-sky-700 px-4 py-2 rounded-lg font-semibold disabled:opacity-50"
                     >
