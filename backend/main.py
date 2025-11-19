@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import cast
 from contextlib import asynccontextmanager
 import os
-import backend.api.chat
 
 # -----------------------------------------------------------
 # Constants
@@ -46,7 +45,7 @@ FRONTEND_ORIGINS = [
 ]
 
 app.add_middleware(
-    cast(type, CORSMiddleware),   # Fixes IDE warning
+    cast(type, CORSMiddleware),  # Fixes JetBrains IDE type warning
     allow_origins=FRONTEND_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],

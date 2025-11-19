@@ -1,40 +1,50 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
-from pathlib import Path
-from typing import cast
-import os
+"""
+Chat API router
 
-ROOT_DIR = Path(__file__).resolve().parent.parent
-load_dotenv(dotenv_path=ROOT_DIR / ".env")
+This module must ONLY expose an APIRouter named `router`.
+The FastAPI application, CORS, and health routes are defined in backend/main.py.
+"""
 
-API_VERSION = "1.0.0"
+from fastapi import APIRouter
+from pydantic import BaseModel
+from typing import Optional
 
-app = FastAPI(
-    title="GOM AI Receptionist API",
-)
+router = APIRouter()
 
-# CORS
-app.add_middleware(
-    cast(type, CORSMiddleware),
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
-# Routers
-from backend.api.chat import router as chat_router
-app.include_router(chat_router, prefix="/api")
+# -----------------------------
+# Models
+# -----------------------------
+class ChatRequest(BaseModel):
+    message: str
+    session_id: Optional[str] = None
+    name: Optional[str] = None
+    business_type: Optional[str] = None
 
-@app.get("/api/health")
-def health_check():
-    return {
-        "status": "ok",
-        "ai_connected": bool(os.getenv("OPENAI_API_KEY")),
-        "cwd": str(ROOT_DIR),
-        "version": API_VERSION,
-    }
+
+class ChatResponse(BaseModel):
+    reply: str
+
+
+class ResetRequest(BaseModel):
+    session_id: Optional[str] = None
+
+
+# -----------------------------
+# Routes
+# -----------------------------
+@router.get("/chat/ping")
+def ping():
+    return {"ok": True}
+
+
+@router.post("/chat", response_model=ChatResponse)
+async def chat(req: ChatRequest) -> ChatResponse:
+    # TODO: Replace with real LLM integration / streaming
+    return ChatResponse(reply=f"Echo: {req.message}")
+
+
+@router.post("/reset")
+async def reset_chat(_: ResetRequest):
+    # TODO: Clear any server-side session state if implemented
+    return {"ok": True}
