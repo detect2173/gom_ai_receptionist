@@ -205,26 +205,32 @@ export default function ChatBox() {
 
         const tone = detectTone(text);
 
+        // ------------------------------------------------------------
+// Extract name + business type (updated logic)
+// ------------------------------------------------------------
         let updatedName = firstName;
         let updatedBusinessType = businessType;
 
         const maybeName = extractFirstName(text);
-        if (maybeName && !updatedName) {
+        if (maybeName) {
             updatedName = maybeName;
             setFirstName(maybeName);
+
             if (typeof window !== "undefined") {
                 window.localStorage.setItem(NAME_KEY, maybeName);
             }
         }
 
         const maybeBiz = extractBusinessType(text);
-        if (maybeBiz && !updatedBusinessType) {
+        if (maybeBiz) {
             updatedBusinessType = maybeBiz;
             setBusinessType(maybeBiz);
+
             if (typeof window !== "undefined") {
                 window.localStorage.setItem(BIZ_KEY, maybeBiz);
             }
         }
+
 
         setMessages((prev) => [...prev, { sender: "user", text }]);
         setInput("");
