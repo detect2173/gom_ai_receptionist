@@ -1,12 +1,8 @@
 "use client";
 
-import React, {
-    useState,
-    useEffect,
-    useRef,
-    ChangeEvent,
-    KeyboardEvent,
-} from "react";
+import React, { useState, useEffect, useRef } from "react";
+import type { ChangeEvent, KeyboardEvent } from "react";
+
 import MessageBubble from "./MessageBubble";
 import { motion } from "framer-motion";
 import { v4 as uuidv4 } from "uuid";
@@ -29,13 +25,7 @@ const BIZ_KEY = "gom_business_type";
 // Component
 // ------------------------------------------------------------
 export default function ChatBox() {
-    const [messages, setMessages] = useState<Message[]>([]);
-    const [input, setInput] = useState("");
-    const [loading, setLoading] = useState(false);
-
     const chatEndRef = useRef<HTMLDivElement | null>(null);
-
-    // Unique session ID
     const [sessionId] = useState(() => uuidv4());
 
     // Persistent personalization fields
@@ -53,29 +43,42 @@ export default function ChatBox() {
         return null;
     });
 
-    // ------------------------------------------------------------
-    // Initial Greeting (Runs ONCE)
-    // ------------------------------------------------------------
-    useEffect(() => {
-        if (typeof window === "undefined") return;
+    // Initial messages with lazy initializer — no useEffect needed
+    const [messages, setMessages] = useState<Message[]>(() => {
+        if (typeof window !== "undefined") {
+            const storedName = window.localStorage.getItem(NAME_KEY);
+            const storedBiz = window.localStorage.getItem(BIZ_KEY);
 
-        // Pull latest values from localStorage (safe + reliable)
-        const storedName = window.localStorage.getItem(NAME_KEY);
-        const storedBiz = window.localStorage.getItem(BIZ_KEY);
+            if (storedName && storedBiz) {
+                return [
+                    {
+                        sender: "ai",
+                        text: `Welcome back, ${storedName}! How’s everything going with the ${storedBiz}?`,
+                    },
+                ];
+            }
 
-        let greeting: string;
-
-        if (storedName && storedBiz) {
-            greeting = `Welcome back, ${storedName}! How’s everything going with the ${storedBiz}?`;
-        } else if (storedName) {
-            greeting = `Welcome back, ${storedName}! What can I help you with today?`;
-        } else {
-            greeting =
-                "Hi there 👋 — I’m Samantha, the AI Receptionist for Great Owl Marketing! How can I assist you today?";
+            if (storedName) {
+                return [
+                    {
+                        sender: "ai",
+                        text: `Welcome back, ${storedName}! What can I help you with today?`,
+                    },
+                ];
+            }
         }
 
-        setMessages([{ sender: "ai", text: greeting }]);
-    }, []);
+        return [
+            {
+                sender: "ai",
+                text:
+                    "Hi there 👋 — I’m Samantha, the AI Receptionist for Great Owl Marketing! How can I assist you today?",
+            },
+        ];
+    });
+
+    const [input, setInput] = useState("");
+    const [loading, setLoading] = useState(false);
 
     // ------------------------------------------------------------
     // Smooth Auto-Scroll
@@ -202,7 +205,6 @@ export default function ChatBox() {
 
         const tone = detectTone(text);
 
-        // Extract name + business type once
         let updatedName = firstName;
         let updatedBusinessType = businessType;
 
@@ -210,14 +212,18 @@ export default function ChatBox() {
         if (maybeName && !updatedName) {
             updatedName = maybeName;
             setFirstName(maybeName);
-            window.localStorage.setItem(NAME_KEY, maybeName);
+            if (typeof window !== "undefined") {
+                window.localStorage.setItem(NAME_KEY, maybeName);
+            }
         }
 
         const maybeBiz = extractBusinessType(text);
         if (maybeBiz && !updatedBusinessType) {
             updatedBusinessType = maybeBiz;
             setBusinessType(maybeBiz);
-            window.localStorage.setItem(BIZ_KEY, maybeBiz);
+            if (typeof window !== "undefined") {
+                window.localStorage.setItem(BIZ_KEY, maybeBiz);
+            }
         }
 
         setMessages((prev) => [...prev, { sender: "user", text }]);
@@ -243,7 +249,6 @@ export default function ChatBox() {
 
             const contentType = res.headers.get("content-type") || "";
 
-            // Non-stream fallback
             if (contentType.includes("application/json")) {
                 const data = await res.json();
                 const reply =
@@ -256,7 +261,6 @@ export default function ChatBox() {
                 return;
             }
 
-            // Streaming enabled
             const reader = res.body?.getReader();
             if (reader) {
                 await streamAIResponse(reader, tone);
